@@ -1,48 +1,63 @@
-# Discogsography MCP Server
+# GrooveMap MCP server
 
-Model Context Protocol (MCP) server that exposes the Discogsography knowledge graph to AI assistants like Claude, Cursor, and Zed.
+Model Context Protocol integration that exposes GrooveMap to AI assistants through the separately deployed `catalog-api`. It has no direct database access.
 
-All data is fetched via the Discogsography API — the MCP server has no direct database dependencies.
+This repository is licensed under the [MIT License](LICENSE).
 
 ## Tools
 
-| Tool                  | Description                                                    |
-| --------------------- | -------------------------------------------------------------- |
-| `search`              | Full-text search across artists, labels, masters, and releases |
-| `get_artist_details`  | Detailed artist info (genres, styles, groups, release count)   |
-| `get_label_details`   | Label info with release count                                  |
-| `get_release_details` | Release info (title, year, artists, labels, genres, styles)    |
-| `get_genre_details`   | Genre info with artist count                                   |
-| `get_style_details`   | Style (sub-genre) info with artist count                       |
-| `find_path`           | Shortest path between any two entities in the graph            |
-| `get_trends`          | Release count by year for any entity                           |
-| `get_graph_stats`     | Database-wide node counts                                      |
-| `get_collaborators`   | Artists who share releases with a given artist                 |
-| `get_genre_tree`      | Full genre/style hierarchy with release counts                 |
-| `nlq_query`           | Ask a natural-language question about the knowledge graph (multi-entity/relationship answers) |
+| Tool | Purpose |
+| --- | --- |
+| `search` | Search artists, labels, masters, and releases |
+| `get_artist_details` | Read an artist and its catalog relationships |
+| `get_label_details` | Read a label and release count |
+| `get_release_details` | Read release metadata |
+| `get_genre_details` / `get_style_details` | Read taxonomy details |
+| `find_path` | Find a shortest path between graph entities |
+| `get_trends` | Read an entity's release timeline |
+| `get_graph_stats` | Read graph-wide entity counts |
+| `get_collaborators` | Read an artist collaboration network |
+| `get_genre_tree` | Read the genre/style hierarchy |
+| `nlq_query` | Ask a natural-language graph question |
 
-## Installation
+## Development
 
 ```bash
-# From PyPI (when published)
-uvx discogsography-mcp
-
-# From source
-uv sync --all-extras
+mise install
+just setup
+just check
 ```
 
-## Configuration
+The stable repository interface is:
 
-### Claude Desktop
+- `just setup` — install the locked environment.
+- `just check` — run formatting, typing, tests, protocol/contract checks, builds, license checks, and a Commitizen preview.
+- `just test` — run the focused MCP adapter suite with coverage.
+- `just protocol-check` — verify the exported MCP tool surface and Catalog API compatibility.
+- `just build` — build wheel and source distribution.
+- `just release-dry-run` — generate checksums, SBOM, notices, and provenance without publishing.
+- `just bump-preview` — preview the next Conventional Commits version without changing files.
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+`groovemap-agent-tools` is resolved from immutable `python-libraries` commit `28fa329702bc76896cc54ab8d05ec5b1bd3d929e`. Local operators use their existing Git credentials; no token is stored in this repository.
+
+## Run
+
+After installation:
+
+```bash
+API_BASE_URL=http://localhost:8004 groovemap-mcp
+groovemap-mcp --transport streamable-http
+```
+
+The default transport is `stdio`. `streamable-http` is available for an explicitly designed hosted deployment.
+
+Example local client configuration:
 
 ```json
 {
   "mcpServers": {
-    "discogsography": {
-      "command": "uvx",
-      "args": ["discogsography-mcp"],
+    "groovemap": {
+      "command": "groovemap-mcp",
       "env": {
         "API_BASE_URL": "http://localhost:8004"
       }
@@ -51,55 +66,10 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-### Claude Code
+Do not commit generated client configuration when it contains credentials or machine-specific paths.
 
-Add to `.mcp.json`:
+## Boundaries and releases
 
-```json
-{
-  "mcpServers": {
-    "discogsography": {
-      "command": "uvx",
-      "args": ["discogsography-mcp"],
-      "env": {
-        "API_BASE_URL": "http://localhost:8004"
-      }
-    }
-  }
-}
-```
+The MCP server consumes a promoted v1 Catalog API route contract and the versioned framework-neutral `groovemap-agent-tools` package. It does not import API implementation modules. Hosted release automation remains disabled until a short-lived GitHub App installation token can read the private library repository and an approved package publishing identity exists.
 
-### Cursor / Zed
-
-Use the same `command` and `args` in your editor's MCP server configuration.
-
-## Environment Variables
-
-| Variable       | Default                 | Description                         |
-| -------------- | ----------------------- | ----------------------------------- |
-| `API_BASE_URL` | `http://localhost:8004` | Base URL for the Discogsography API |
-
-## Transport
-
-- **stdio** (default): For local use with Claude Desktop, Cursor, Zed
-- **streamable-http**: For hosted deployments
-
-```bash
-# stdio (default)
-discogsography-mcp
-
-# streamable-http
-discogsography-mcp --transport streamable-http
-```
-
-## Example Queries
-
-With the MCP server connected, AI assistants can answer questions like:
-
-- "Find me jazz labels active in the 1960s"
-- "What's the shortest path between Brian Eno and J Dilla?"
-- "Show me the genre distribution of releases on Blue Note"
-- "Which artists have the most releases in the Electronic genre?"
-- "What are the release trends for Warp Records over time?"
-- "Who did Miles Davis collaborate with most often?"
-- "Show me the complete genre hierarchy — what styles belong to Electronic?"
+See [docs/extraction.md](docs/extraction.md) for retained-history provenance.

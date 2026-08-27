@@ -1,6 +1,6 @@
 """Tests for the MCP server tools.
 
-All tools now call the Discogsography API via httpx instead of
+All tools call the GrooveMap Catalog API via httpx instead of
 accessing databases directly. Tests mock httpx responses.
 """
 

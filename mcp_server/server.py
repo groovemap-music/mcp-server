@@ -1,30 +1,30 @@
-"""MCP server exposing the Discogsography knowledge graph to AI assistants.
+"""MCP server exposing the GrooveMap knowledge graph to AI assistants.
 
 Provides 12 tools for searching, exploring, and analyzing music data:
   search, get_artist_details, get_label_details, get_release_details,
   get_genre_details, get_style_details, find_path, get_trends,
   get_graph_stats, get_collaborators, get_genre_tree, nlq_query
 
-All data is fetched via the Discogsography API — no direct database access.
+All data is fetched via the GrooveMap Catalog API — no direct database access.
 
 Transports: stdio (default, for Claude Desktop) or streamable-http (hosted).
 
 Configuration via environment variables:
-  API_BASE_URL    Base URL for the Discogsography API (default: http://localhost:8004)
+  API_BASE_URL    Base URL for the GrooveMap Catalog API (default: http://localhost:8004)
 """
 
+import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from os import getenv
-import sys
 from typing import Any
 from urllib.parse import quote as _url_quote
 
 import httpx
+import structlog
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context
-import structlog
 
 
 logger = structlog.get_logger(__name__)
@@ -69,7 +69,7 @@ async def app_lifespan(server: MCPServer) -> AsyncIterator[AppContext]:  # noqa:
 # ---------------------------------------------------------------------------
 
 mcp = MCPServer(
-    "Discogsography",
+    "GrooveMap",
     lifespan=app_lifespan,
     instructions=(
         "Music knowledge graph server. Use 'search' to find entities, "
@@ -95,7 +95,7 @@ def _ctx(ctx: Context[AppContext, Any]) -> AppContext:
 
 
 async def _api_get(app: AppContext, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Make a GET request to the Discogsography API and return parsed JSON."""
+    """Make a GET request to the GrooveMap Catalog API and return parsed JSON."""
     url = f"{app.base_url}{path}"
     try:
         resp = await app.client.get(url, params=params)
@@ -110,7 +110,7 @@ async def _api_get(app: AppContext, path: str, params: dict[str, Any] | None = N
 
 
 async def _api_post(app: AppContext, path: str, json_data: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Make a POST request to the Discogsography API and return parsed JSON."""
+    """Make a POST request to the GrooveMap Catalog API and return parsed JSON."""
     url = f"{app.base_url}{path}"
     try:
         resp = await app.client.post(url, json=json_data)
