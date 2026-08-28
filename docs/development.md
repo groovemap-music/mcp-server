@@ -183,8 +183,8 @@ five sites at once, which is the point of declaring it.
 
 ```bash
 # Clone repository
-git clone https://github.com/SimplicityGuy/discogsography.git
-cd discogsography
+git clone https://github.com/groovemap-music/mcp-server.git
+cd mcp-server
 
 # Install all dependencies (including dev dependencies)
 just install
