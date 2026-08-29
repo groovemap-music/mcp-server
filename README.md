@@ -38,7 +38,9 @@ The stable repository interface is:
 - `just release-dry-run` — generate checksums, SBOM, notices, and provenance without publishing.
 - `just bump-preview` — preview the next Conventional Commits version without changing files.
 
-`groovemap-agent-tools` is resolved from immutable `python-libraries` commit `28fa329702bc76896cc54ab8d05ec5b1bd3d929e`. Local operators use their existing Git credentials; no token is stored in this repository.
+`groovemap-agent-tools` is resolved from the private `python-libraries` repository. The
+lockfile records the reviewed revision. Local operators use their existing Git credentials;
+no token is stored in this repository.
 
 ## Run
 
@@ -72,4 +74,5 @@ Do not commit generated client configuration when it contains credentials or mac
 
 The MCP server consumes a promoted v1 Catalog API route contract and the versioned framework-neutral `groovemap-agent-tools` package. It does not import API implementation modules. Hosted release automation remains disabled until a short-lived GitHub App installation token can read the private library repository and an approved package publishing identity exists.
 
-See [docs/extraction.md](docs/extraction.md) for retained-history provenance.
+See the [documentation index](docs/README.md) for architecture, configuration,
+development, and retained design records.

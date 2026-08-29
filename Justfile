@@ -23,7 +23,7 @@ typecheck:
     uv run mypy
 
 test:
-    uv run pytest --cov=mcp_server --cov-report=term-missing
+    uv run pytest --cov=mcp_server --cov-report=term-missing --cov-report=xml
 
 protocol-check:
     uv run pytest tests/test_mcp_tools_regression.py tests/test_contract.py

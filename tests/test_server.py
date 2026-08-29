@@ -614,27 +614,27 @@ class TestMain:
         """Verify main() parses --transport and calls mcp.run()."""
         from mcp_server.server import main
 
-        with patch("mcp_server.server.mcp") as mock_mcp, patch("sys.argv", ["discogsography-mcp", "--transport", "streamable-http"]):
+        with patch("mcp_server.server.mcp") as mock_mcp, patch("sys.argv", ["groovemap-mcp", "--transport", "streamable-http"]):
             main()
             mock_mcp.run.assert_called_once_with(transport="streamable-http")
 
     def test_main_default_stdio(self):
         from mcp_server.server import main
 
-        with patch("mcp_server.server.mcp") as mock_mcp, patch("sys.argv", ["discogsography-mcp"]):
+        with patch("mcp_server.server.mcp") as mock_mcp, patch("sys.argv", ["groovemap-mcp"]):
             main()
             mock_mcp.run.assert_called_once_with(transport="stdio")
 
     def test_main_transport_equals_syntax(self):
         from mcp_server.server import main
 
-        with patch("mcp_server.server.mcp") as mock_mcp, patch("sys.argv", ["discogsography-mcp", "--transport=streamable-http"]):
+        with patch("mcp_server.server.mcp") as mock_mcp, patch("sys.argv", ["groovemap-mcp", "--transport=streamable-http"]):
             main()
             mock_mcp.run.assert_called_once_with(transport="streamable-http")
 
     def test_main_invalid_transport_falls_back_to_stdio(self):
         from mcp_server.server import main
 
-        with patch("mcp_server.server.mcp") as mock_mcp, patch("sys.argv", ["discogsography-mcp", "--transport", "invalid"]):
+        with patch("mcp_server.server.mcp") as mock_mcp, patch("sys.argv", ["groovemap-mcp", "--transport", "invalid"]):
             main()
             mock_mcp.run.assert_called_once_with(transport="stdio")
