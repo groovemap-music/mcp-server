@@ -5,7 +5,7 @@ library_repo="${GROOVEMAP_LIBRARIES_REPO:-../python-libraries}"
 library_checkout=
 
 library_is_valid() {
-  [[ -d "${library_repo}/.git" ]] &&
+  [[ "$(git -C "${library_repo}" rev-parse --is-inside-work-tree 2>/dev/null)" = "true" ]] &&
     [[ "$(git -C "${library_repo}" rev-parse HEAD)" = "${expected}" ]] &&
     [[ -z "$(git -C "${library_repo}" status --short)" ]]
 }
@@ -34,3 +34,11 @@ mkdir -p .build/libraries
 find .build/libraries -type f -name '*.whl' -delete
 uv build --wheel --out-dir .build/libraries "${library_repo}"
 uv build --wheel --out-dir .build/libraries "${library_repo}/agent-tools"
+uv export \
+  --frozen \
+  --no-dev \
+  --no-emit-project \
+  --no-emit-package groovemap-runtime \
+  --no-emit-package groovemap-agent-tools \
+  --output-file .build/requirements.txt \
+  >/dev/null

@@ -102,8 +102,14 @@ The stable repository interface is:
 - `just protocol-check` — verify the exported MCP tool surface and Catalog API
   compatibility.
 - `just build` — build the wheel and source distribution.
+- `just image` — build and inspect the local `mcp-server:local` Streamable HTTP image.
 - `just release-dry-run` — generate checksums, SBOM, notices, and provenance without
   publishing.
+
+Pull requests, including Dependabot pull requests, run the same required CI graph. Weekly
+scheduled validation exercises that graph against newly disclosed dependency issues. Version
+tags are the only release trigger; they retain attested package artifacts and publish the
+repository-named `ghcr.io/groovemap-music/mcp-server` image.
 
 The framework-neutral `groovemap-agent-tools` dependency is owned by
 [`python-libraries`](https://github.com/groovemap-music/python-libraries/tree/main/agent-tools).
