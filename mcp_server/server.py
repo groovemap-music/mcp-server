@@ -14,7 +14,10 @@ Configuration via environment variables:
 """
 
 import sys
-from collections.abc import AsyncIterator
+
+# These annotation types stay available at runtime because the MCP SDK inspects
+# tool and lifespan annotations when registering handlers under Python 3.14.
+from collections.abc import AsyncIterator  # noqa: TC003
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from os import getenv
@@ -24,7 +27,7 @@ from urllib.parse import quote as _url_quote
 import httpx
 import structlog
 from mcp.server import MCPServer
-from mcp.server.mcpserver import Context
+from mcp.server.mcpserver import Context  # noqa: TC002
 
 
 logger = structlog.get_logger(__name__)
