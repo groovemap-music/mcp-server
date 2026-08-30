@@ -47,7 +47,7 @@ def _validate_numeric_id(value: str, name: str) -> dict[str, Any] | None:
 
 @dataclass
 class AppContext:
-    """Typed lifespan context holding the HTTP client, API base URL, and token."""
+    """Typed lifespan context holding the HTTP client and API base URL."""
 
     client: httpx.AsyncClient
     base_url: str  # nosemgrep: path-traversal — base_url comes from env var, not user input

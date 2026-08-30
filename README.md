@@ -1,6 +1,16 @@
 # GrooveMap MCP server
 
-Model Context Protocol integration that exposes GrooveMap to AI assistants through the separately deployed `catalog-api`. It has no direct database access.
+`mcp-server` presents the GrooveMap music catalog as twelve
+[Model Context Protocol (MCP)](https://modelcontextprotocol.io/) tools. It translates MCP
+tool calls into HTTP requests to the separately deployed
+[`catalog-api`](https://github.com/groovemap-music/catalog-api); it never connects directly
+to a database.
+
+```mermaid
+flowchart LR
+    Client["MCP client"] -->|"stdio or Streamable HTTP"| Server["mcp-server"]
+    Server -->|"HTTP /api/*"| API["catalog-api"]
+```
 
 This repository is licensed under the [MIT License](LICENSE).
 
@@ -10,9 +20,10 @@ This repository is licensed under the [MIT License](LICENSE).
 | --- | --- |
 | `search` | Search artists, labels, masters, and releases |
 | `get_artist_details` | Read an artist and its catalog relationships |
-| `get_label_details` | Read a label and release count |
+| `get_label_details` | Read a label and its release count |
 | `get_release_details` | Read release metadata |
-| `get_genre_details` / `get_style_details` | Read taxonomy details |
+| `get_genre_details` | Read genre metadata |
+| `get_style_details` | Read style metadata |
 | `find_path` | Find a shortest path between graph entities |
 | `get_trends` | Read an entity's release timeline |
 | `get_graph_stats` | Read graph-wide entity counts |
@@ -20,7 +31,61 @@ This repository is licensed under the [MIT License](LICENSE).
 | `get_genre_tree` | Read the genre/style hierarchy |
 | `nlq_query` | Ask a natural-language graph question |
 
-## Development
+The [tool reference](docs/tools.md) documents inputs, Catalog API routes, and validation.
+
+## Run locally
+
+Install the pinned tools and environment, then point the server at a local Catalog API:
+
+```bash
+mise install
+just setup
+API_BASE_URL=http://localhost:8004 uv run groovemap-mcp
+```
+
+The default transport is `stdio`, which is appropriate when an MCP client launches the
+server as a subprocess. An explicitly designed hosted deployment can select Streamable
+HTTP:
+
+```bash
+API_BASE_URL=http://localhost:8004 uv run groovemap-mcp --transport streamable-http
+```
+
+Example local client configuration:
+
+```json
+{
+  "mcpServers": {
+    "groovemap": {
+      "command": "uv",
+      "args": [
+        "--project",
+        "/absolute/path/to/mcp-server",
+        "run",
+        "groovemap-mcp"
+      ],
+      "env": {
+        "API_BASE_URL": "http://localhost:8004"
+      }
+    }
+  }
+}
+```
+
+Replace `/absolute/path/to/mcp-server` with a stable absolute path to this checkout. The
+client can then launch the project entry point without depending on shell activation or a
+global package installation.
+
+Do not commit generated client configuration when it contains credentials or
+machine-specific paths. See [configuration](docs/configuration.md) and
+[transport and security boundaries](docs/security.md) before exposing the server beyond a
+local process boundary.
+
+The authentication boundary is outside this adapter: the current server sends no Catalog
+API credential and configures no hosted ingress protection. Keep both hops within a trusted
+boundary unless `deployment` supplies those controls.
+
+## Develop
 
 ```bash
 mise install
@@ -31,48 +96,29 @@ just check
 The stable repository interface is:
 
 - `just setup` — install the locked environment.
-- `just check` — run formatting, typing, tests, protocol/contract checks, builds, license checks, and a Commitizen preview.
-- `just test` — run the focused MCP adapter suite with coverage.
-- `just protocol-check` — verify the exported MCP tool surface and Catalog API compatibility.
-- `just build` — build wheel and source distribution.
-- `just release-dry-run` — generate checksums, SBOM, notices, and provenance without publishing.
-- `just bump-preview` — preview the next Conventional Commits version without changing files.
+- `just check` — run formatting, typing, tests, protocol/contract checks, builds, license
+  checks, and a Commitizen preview.
+- `just test` — run the MCP adapter suite with coverage.
+- `just protocol-check` — verify the exported MCP tool surface and Catalog API
+  compatibility.
+- `just build` — build the wheel and source distribution.
+- `just release-dry-run` — generate checksums, SBOM, notices, and provenance without
+  publishing.
 
-`groovemap-agent-tools` is resolved from the private `python-libraries` repository. The
-lockfile records the reviewed revision. Local operators use their existing Git credentials;
-no token is stored in this repository.
+The framework-neutral `groovemap-agent-tools` dependency is owned by
+[`python-libraries`](https://github.com/groovemap-music/python-libraries/tree/main/agent-tools).
+The [development guide](docs/development.md) explains the repository boundary and contract
+promotion workflow.
 
-## Run
+## Documentation
 
-After installation:
+- [Documentation index](docs/README.md)
+- [Architecture and ownership](docs/architecture.md)
+- [Tool reference](docs/tools.md)
+- [Configuration](docs/configuration.md)
+- [Transports and security](docs/security.md)
+- [Development](docs/development.md)
+- [GrooveMap logging emoji convention](https://github.com/groovemap-music/.github/blob/main/docs/emoji-guide.md)
 
-```bash
-API_BASE_URL=http://localhost:8004 groovemap-mcp
-groovemap-mcp --transport streamable-http
-```
-
-The default transport is `stdio`. `streamable-http` is available for an explicitly designed hosted deployment.
-
-Example local client configuration:
-
-```json
-{
-  "mcpServers": {
-    "groovemap": {
-      "command": "groovemap-mcp",
-      "env": {
-        "API_BASE_URL": "http://localhost:8004"
-      }
-    }
-  }
-}
-```
-
-Do not commit generated client configuration when it contains credentials or machine-specific paths.
-
-## Boundaries and releases
-
-The MCP server consumes a promoted v1 Catalog API route contract and the versioned framework-neutral `groovemap-agent-tools` package. It does not import API implementation modules. Hosted release automation remains disabled until a short-lived GitHub App installation token can read the private library repository and an approved package publishing identity exists.
-
-See the [documentation index](docs/README.md) for architecture, configuration,
-development, and retained design records.
+Hosted topology, credentials, network policy, and image rollout belong to the
+[`deployment`](https://github.com/groovemap-music/deployment) repository.
