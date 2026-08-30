@@ -1,11 +1,14 @@
 # Source extraction
 
-`mcp-server` was extracted without modifying the original `SimplicityGuy/discogsography` repository.
+`mcp-server` was extracted without modifying the original
+`SimplicityGuy/discogsography` repository. That retired repository name and the historical
+bead identifier below are retained only to make the source-history procedure reproducible;
+they are not active GrooveMap branding.
 
 ```bash
 git clone --no-local --single-branch --no-tags \
   --branch wt/bead/issue/discogsography-2kpm.22 \
-  /Users/Robert/workspaces/github/SimplicityGuy/discogsography mcp-server
+  /path/to/SimplicityGuy/discogsography mcp-server
 git filter-repo --force \
   --path mcp-server/ --path-rename mcp-server/: \
   --path tests/mcp-server/ --path-rename tests/mcp-server/:tests/ \
