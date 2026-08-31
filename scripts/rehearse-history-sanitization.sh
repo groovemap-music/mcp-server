@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+if [[ "$#" -ne 2 ]]; then
+  echo "usage: $0 SOURCE_REPOSITORY ABSOLUTE_OUTPUT_DIRECTORY" >&2
+  exit 2
+fi
+
+source_repo="$1"
+output_root="$2"
+archive_commit="4d0ecef0a798aab2f769cb5eb2e93982236f4f91"
+archive_repo="${PLANNING_ARCHIVE_REPO:-}"
+
+if [[ "$(git -C "${source_repo}" rev-parse --is-inside-work-tree 2>/dev/null || true)" != "true" ]]; then
+  echo "SOURCE_REPOSITORY must be a non-bare Git worktree." >&2
+  exit 2
+fi
+if [[ "${output_root}" != /* ]] || [[ -e "${output_root}" ]]; then
+  echo "ABSOLUTE_OUTPUT_DIRECTORY must be an absolute path that does not exist." >&2
+  exit 2
+fi
+if [[ -z "${archive_repo}" ]] || ! git -C "${archive_repo}" cat-file -e "${archive_commit}^{commit}"; then
+  echo "PLANNING_ARCHIVE_REPO must contain prerequisite commit ${archive_commit}." >&2
+  exit 2
+fi
+for command in git git-filter-repo gitleaks trufflehog just shasum; do
+  if ! command -v "${command}" >/dev/null; then
+    echo "Missing required command: ${command}" >&2
+    exit 2
+  fi
+done
+
+mkdir -m 700 "${output_root}"
+backup_repo="${output_root}/private-remote-backup.git"
+sanitized_repo="${output_root}/sanitized-candidate.git"
+sanitized_worktree="${output_root}/sanitized-checkout"
+bundle="${output_root}/mcp-server-pre-rewrite.bundle"
+
+git clone --quiet --mirror --no-local "${source_repo}" "${backup_repo}"
+git clone --quiet --mirror --no-local "${source_repo}" "${sanitized_repo}"
+git -C "${backup_repo}" remote -v > "${output_root}/remotes-before.txt"
+git -C "${backup_repo}" for-each-ref --format='%(refname)\t%(objectname)\t%(*objectname)' > "${output_root}/refs-before.tsv"
+git -C "${backup_repo}" bundle create "${bundle}" --all
+git bundle verify "${bundle}" > "${output_root}/bundle-verify.txt" 2>&1
+git -C "${backup_repo}" rev-list --objects --all > "${output_root}/object-graph-before.txt"
+
+private_objects="${output_root}/private-objects-before.txt"
+awk '
+  $2 == ".planning" || index($2, ".planning/") == 1 ||
+  $2 == "docs/superpowers/plans" || index($2, "docs/superpowers/plans/") == 1 ||
+  $2 == "docs/superpowers/specs" || index($2, "docs/superpowers/specs/") == 1 ||
+  $2 == "docs/extraction.md" { print }
+' "${output_root}/object-graph-before.txt" > "${private_objects}"
+if [[ ! -s "${private_objects}" ]]; then
+  echo "Expected private planning objects were not found in source history." >&2
+  exit 1
+fi
+awk -v archive="${archive_commit}" '{ object=$1; $1=""; sub(/^ /, ""); print object "\t" archive "\t" $0 }' \
+  "${private_objects}" > "${output_root}/removed-object-map.tsv"
+
+git -C "${sanitized_repo}" filter-repo --force --invert-paths \
+  --path .planning/ \
+  --path docs/superpowers/plans/ \
+  --path docs/superpowers/specs/ \
+  --path docs/extraction.md
+
+cp "${sanitized_repo}/filter-repo/commit-map" "${output_root}/commit-map.tsv"
+cp "${sanitized_repo}/filter-repo/ref-map" "${output_root}/ref-map.tsv"
+git -C "${sanitized_repo}" for-each-ref --format='%(refname)\t%(objectname)\t%(*objectname)' > "${output_root}/refs-after.tsv"
+git -C "${sanitized_repo}" fsck --full --strict > "${output_root}/fsck.txt" 2>&1
+git -C "${sanitized_repo}" rev-list --objects --all > "${output_root}/rewritten-object-graph.txt"
+
+private_paths="${output_root}/private-paths-after.txt"
+awk '
+  $2 == ".planning" || index($2, ".planning/") == 1 ||
+  $2 == "docs/superpowers/plans" || index($2, "docs/superpowers/plans/") == 1 ||
+  $2 == "docs/superpowers/specs" || index($2, "docs/superpowers/specs/") == 1 ||
+  $2 == "docs/extraction.md" { print }
+' "${output_root}/rewritten-object-graph.txt" > "${private_paths}"
+if [[ -s "${private_paths}" ]]; then
+  echo "Private planning paths remain reachable after filtering." >&2
+  exit 1
+fi
+
+gitleaks_config="${output_root}/gitleaks.toml"
+if git -C "${sanitized_repo}" show HEAD:.gitleaks.toml > "${gitleaks_config}" 2>/dev/null; then
+  gitleaks git --config "${gitleaks_config}" --log-opts=--all --redact --no-banner "${sanitized_repo}" \
+    > "${output_root}/gitleaks-history.txt" 2>&1
+else
+  rm "${gitleaks_config}"
+  gitleaks git --log-opts=--all --redact --no-banner "${sanitized_repo}" \
+    > "${output_root}/gitleaks-history.txt" 2>&1
+fi
+trufflehog git "file://${sanitized_repo}" --bare --fail --only-verified \
+  > "${output_root}/trufflehog-history.txt" 2>&1
+git clone --quiet "${sanitized_repo}" "${sanitized_worktree}"
+(
+  cd "${sanitized_worktree}"
+  gitleaks dir --redact --no-banner . > "${output_root}/gitleaks-worktree.txt" 2>&1
+  just check > "${output_root}/sanitized-just-check.txt" 2>&1
+)
+
+cat > "${output_root}/CUTOVER-STATUS.txt" <<EOF
+archive-prerequisite=${archive_commit}
+source-head=$(git -C "${source_repo}" rev-parse HEAD)
+sanitized-head=$(git -C "${sanitized_worktree}" rev-parse HEAD)
+backup=${backup_repo}
+sanitized-clone=${sanitized_repo}
+commit-map=${output_root}/commit-map.tsv
+ref-map=${output_root}/ref-map.tsv
+removed-object-map=${output_root}/removed-object-map.tsv
+remote-cutover-approved=false
+public-visibility-approved=false
+EOF
+
+shasum -a 256 \
+  "${bundle}" \
+  "${output_root}/refs-before.tsv" \
+  "${output_root}/refs-after.tsv" \
+  "${output_root}/commit-map.tsv" \
+  "${output_root}/ref-map.tsv" \
+  "${output_root}/removed-object-map.tsv" \
+  "${output_root}/fsck.txt" \
+  "${output_root}/rewritten-object-graph.txt" \
+  "${output_root}/gitleaks-history.txt" \
+  "${output_root}/trufflehog-history.txt" \
+  "${output_root}/gitleaks-worktree.txt" \
+  "${output_root}/sanitized-just-check.txt" \
+  "${output_root}/CUTOVER-STATUS.txt" \
+  > "${output_root}/SHA256SUMS"
+find "${output_root}" -type d -exec chmod 700 {} +
+find "${output_root}" -type f -exec chmod 600 {} +
+
+echo "History-sanitization rehearsal passed."
+echo "Evidence: ${output_root}"
+echo "No remote was changed; cutover and visibility still require explicit approval."

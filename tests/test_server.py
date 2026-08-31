@@ -339,7 +339,7 @@ class TestFindPath:
 
     @pytest.mark.asyncio
     async def test_max_depth_above_api_ceiling_is_clamped_to_10(self, mock_context, app_ctx):
-        """discogsography-cu2.51: the tool used to clamp to 15 while the API's
+        """Regression: the tool used to clamp to 15 while the API's
         _MAX_PATH_DEPTH is 10 (Query(..., le=10)), so max_depth=11-15 always got
         forwarded and always 422'd. It must now be clamped to the API's real ceiling.
         """
@@ -355,7 +355,7 @@ class TestFindPath:
 
     @pytest.mark.asyncio
     async def test_max_depth_non_digit_falls_back_to_documented_default(self, mock_context, app_ctx):
-        """discogsography-cu2.51: the non-digit fallback used to be 3, contradicting the
+        """Regression: the non-digit fallback used to be 3, contradicting the
         documented/signature default of 10.
         """
         from mcp_server.server import find_path

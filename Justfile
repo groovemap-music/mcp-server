@@ -72,3 +72,6 @@ bump:
 
 release-dry-run: check prepare-image
     bash scripts/release-dry-run.sh
+
+history-rehearsal source-repository output-directory:
+    PLANNING_ARCHIVE_REPO="${PLANNING_ARCHIVE_REPO}" bash scripts/rehearse-history-sanitization.sh "{{source-repository}}" "{{output-directory}}"
