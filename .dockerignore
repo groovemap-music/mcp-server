@@ -1,0 +1,13 @@
+.git
+.github
+.venv
+build
+coverage
+dist/*
+!dist/*.whl
+docs
+htmlcov
+secrets
+tests
+*.pem
+*.key

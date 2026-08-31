@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  attestations: write
+  contents: read
+  id-token: write
+  packages: write
+
+jobs:
+  release:
+    uses: groovemap-music/automation/.github/workflows/reusable-release.yml@7db8b4c535c79329e3821e32177932b4f9059253
+    with:
+      runner: ubuntu-24.04
+      repository-name: mcp-server
+      setup-command: just setup
+      check-command: just check
+      release-command: just release-dry-run
+      artifact-path: |
+        dist/*.whl
+        dist/*.tar.gz
+        dist/provenance.json
+      publish-image: true
+      requires-private-library: true
+      private-library-client-id: ${{ vars.GROOVEMAP_CI_APP_CLIENT_ID }}
+      private-library-revision: 28fa329702bc76896cc54ab8d05ec5b1bd3d929e
+      prepare-image-command: just prepare-image
+    secrets:
+      PRIVATE_LIBRARY_PRIVATE_KEY: ${{ secrets.GROOVEMAP_CI_APP_PRIVATE_KEY }}
