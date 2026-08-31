@@ -13,6 +13,18 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_ROOT = ROOT / "contracts/catalog-api/mcp-server/v1"
 
 
+def test_history_rehearsal_enforces_exclusive_private_archive_paths() -> None:
+    rehearsal = (ROOT / "scripts" / "rehearse-history-sanitization.sh").read_text()
+    gate = (ROOT / "docs" / "history-rewrite-gate.md").read_text()
+    archive_commit = "daf82a149aaa382b3cebbd4b43d3c82e53d4128e"
+
+    assert "PLANNING_ARCHIVE_COMMIT:-" + archive_commit in rehearsal
+    assert "--path docs/superpowers/" in rehearsal
+    assert "--path docs/specs/" in rehearsal
+    assert "docs/superpowers/" in gate
+    assert "docs/specs/" in gate
+
+
 def test_promoted_contract_has_verified_provenance() -> None:
     contract_path = CONTRACT_ROOT / "routes.json"
     contract = json.loads(contract_path.read_text())

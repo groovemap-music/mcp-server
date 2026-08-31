@@ -9,7 +9,7 @@ fi
 
 source_repo="$1"
 output_root="$2"
-archive_commit="4d0ecef0a798aab2f769cb5eb2e93982236f4f91"
+archive_commit="${PLANNING_ARCHIVE_COMMIT:-daf82a149aaa382b3cebbd4b43d3c82e53d4128e}"
 archive_repo="${PLANNING_ARCHIVE_REPO:-}"
 
 if [[ "$(git -C "${source_repo}" rev-parse --is-inside-work-tree 2>/dev/null || true)" != "true" ]]; then
@@ -35,7 +35,7 @@ mkdir -m 700 "${output_root}"
 backup_repo="${output_root}/private-remote-backup.git"
 sanitized_repo="${output_root}/sanitized-candidate.git"
 sanitized_worktree="${output_root}/sanitized-checkout"
-bundle="${output_root}/mcp-server-pre-rewrite.bundle"
+bundle="${output_root}/pre-rewrite.bundle"
 
 git clone --quiet --mirror --no-local "${source_repo}" "${backup_repo}"
 git clone --quiet --mirror --no-local "${source_repo}" "${sanitized_repo}"
@@ -48,8 +48,8 @@ git -C "${backup_repo}" rev-list --objects --all > "${output_root}/object-graph-
 private_objects="${output_root}/private-objects-before.txt"
 awk '
   $2 == ".planning" || index($2, ".planning/") == 1 ||
-  $2 == "docs/superpowers/plans" || index($2, "docs/superpowers/plans/") == 1 ||
-  $2 == "docs/superpowers/specs" || index($2, "docs/superpowers/specs/") == 1 ||
+  $2 == "docs/superpowers" || index($2, "docs/superpowers/") == 1 ||
+  $2 == "docs/specs" || index($2, "docs/specs/") == 1 ||
   $2 == "docs/extraction.md" { print }
 ' "${output_root}/object-graph-before.txt" > "${private_objects}"
 if [[ ! -s "${private_objects}" ]]; then
@@ -61,8 +61,8 @@ awk -v archive="${archive_commit}" '{ object=$1; $1=""; sub(/^ /, ""); print obj
 
 git -C "${sanitized_repo}" filter-repo --force --invert-paths \
   --path .planning/ \
-  --path docs/superpowers/plans/ \
-  --path docs/superpowers/specs/ \
+  --path docs/superpowers/ \
+  --path docs/specs/ \
   --path docs/extraction.md
 
 cp "${sanitized_repo}/filter-repo/commit-map" "${output_root}/commit-map.tsv"
@@ -74,8 +74,8 @@ git -C "${sanitized_repo}" rev-list --objects --all > "${output_root}/rewritten-
 private_paths="${output_root}/private-paths-after.txt"
 awk '
   $2 == ".planning" || index($2, ".planning/") == 1 ||
-  $2 == "docs/superpowers/plans" || index($2, "docs/superpowers/plans/") == 1 ||
-  $2 == "docs/superpowers/specs" || index($2, "docs/superpowers/specs/") == 1 ||
+  $2 == "docs/superpowers" || index($2, "docs/superpowers/") == 1 ||
+  $2 == "docs/specs" || index($2, "docs/specs/") == 1 ||
   $2 == "docs/extraction.md" { print }
 ' "${output_root}/rewritten-object-graph.txt" > "${private_paths}"
 if [[ -s "${private_paths}" ]]; then
