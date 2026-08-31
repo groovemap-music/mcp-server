@@ -8,12 +8,12 @@ backup and sanitized clones. The working repository and its remotes are never re
 The rehearsal removes raw private planning paths from every reachable commit:
 
 - `.planning/`
-- `docs/superpowers/plans/`
-- `docs/superpowers/specs/`
+- `docs/superpowers/`
+- `docs/specs/`
 - `docs/extraction.md`
 
 The private `planning-archive` repository at commit
-`4d0ecef0a798aab2f769cb5eb2e93982236f4f91` preserves the source records. The evidence maps every
+`daf82a149aaa382b3cebbd4b43d3c82e53d4128e` preserves the source records. The evidence maps every
 removed path object to that immutable archive prerequisite.
 
 ```mermaid
@@ -33,6 +33,7 @@ Run the checked-in rehearsal with absolute paths:
 
 ```bash
 export PLANNING_ARCHIVE_REPO=/absolute/path/to/planning-archive
+export PLANNING_ARCHIVE_COMMIT=daf82a149aaa382b3cebbd4b43d3c82e53d4128e
 export GROOVEMAP_LIBRARIES_REPO=/absolute/path/to/python-libraries
 just history-rehearsal /absolute/path/to/mcp-server /absolute/new/evidence-directory
 ```
