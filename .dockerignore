@@ -1,6 +1,7 @@
 .git
 .github
 .venv
+python-libraries
 build
 coverage
 dist/*
