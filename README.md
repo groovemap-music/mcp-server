@@ -124,6 +124,8 @@ promotion workflow.
 - [Configuration](docs/configuration.md)
 - [Transports and security](docs/security.md)
 - [Development](docs/development.md)
+- [Release compliance](docs/release-compliance.md)
+- [History rewrite approval gate](docs/history-rewrite-gate.md)
 - [GrooveMap logging emoji convention](https://github.com/groovemap-music/.github/blob/main/docs/emoji-guide.md)
 
 Hosted topology, credentials, network policy, and image rollout belong to the

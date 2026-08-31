@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MARKDOWN_LINK = re.compile(r"\[[^]]*]\(([^)]+)\)")
 FENCE = re.compile(r"^```(?P<language>[^\s`]*)\s*$")
 DIAGRAM_PREFIXES = ("flowchart ", "graph ", "sequenceDiagram", "classDiagram", "stateDiagram", "erDiagram")
-HISTORICAL_BRANDING_ALLOWLIST = {ROOT / "docs/extraction.md"}
+LEGACY_BRAND = "discogs" + "ography"
 PUBLIC_TOOL_NAMES = {
     "find_path",
     "get_artist_details",
@@ -80,8 +80,8 @@ def main() -> int:
         text = path.read_text(encoding="utf-8")
         errors.extend(validate_local_links(path, text))
         errors.extend(validate_diagram_fences(path, text))
-        if "discogsography" in text.casefold() and path not in HISTORICAL_BRANDING_ALLOWLIST:
-            errors.append(f"{path.relative_to(ROOT)}: active Discogsography branding is not allowed")
+        if LEGACY_BRAND in text.casefold():
+            errors.append(f"{path.relative_to(ROOT)}: legacy project branding is not allowed")
 
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     tool_reference = (ROOT / "docs/tools.md").read_text(encoding="utf-8")
@@ -95,6 +95,11 @@ def main() -> int:
             errors.append(f"README.md: missing required documentation term: {required_term}")
     if SHARED_EMOJI_GUIDE not in readme:
         errors.append("README.md: missing the public shared logging emoji guide")
+    if (ROOT / "docs/extraction.md").exists():
+        errors.append("docs/extraction.md: private extraction provenance must not be published")
+    for required_document in ("docs/release-compliance.md", "docs/history-rewrite-gate.md"):
+        if required_document not in readme:
+            errors.append(f"README.md: missing publication document: {required_document}")
     for launch_fragment in ('"command": "uv"', '"--project"', '"run"', '"groovemap-mcp"'):
         if launch_fragment not in readme:
             errors.append(f"README.md: incomplete uv client launch configuration: {launch_fragment}")
