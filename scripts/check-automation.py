@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 AUTOMATION_REVISION = "7db8b4c535c79329e3821e32177932b4f9059253"
-PRIVATE_LIBRARY_REVISION = "28fa329702bc76896cc54ab8d05ec5b1bd3d929e"
+PYTHON_LIBRARIES_REVISION = "28fa329702bc76896cc54ab8d05ec5b1bd3d929e"
 
 
 def require(text: str, *fragments: str) -> None:
@@ -39,10 +39,6 @@ require(
     "install-command: just install-check",
     "image-command: just image",
     "upload-codecov: true",
-    "requires-private-library: true",
-    "private-library-client-id: ${{ vars.GROOVEMAP_CI_APP_CLIENT_ID }}",
-    f"private-library-revision: {PRIVATE_LIBRARY_REVISION}",
-    "PRIVATE_LIBRARY_PRIVATE_KEY: ${{ secrets.GROOVEMAP_CI_APP_PRIVATE_KEY }}",
     "CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}",
 )
 
@@ -56,17 +52,29 @@ require(
     "repository-name: mcp-server",
     "release-command: just release-dry-run",
     "publish-image: true",
-    "requires-private-library: true",
-    "private-library-client-id: ${{ vars.GROOVEMAP_CI_APP_CLIENT_ID }}",
-    f"private-library-revision: {PRIVATE_LIBRARY_REVISION}",
     "prepare-image-command: just prepare-image",
-    "PRIVATE_LIBRARY_PRIVATE_KEY: ${{ secrets.GROOVEMAP_CI_APP_PRIVATE_KEY }}",
 )
 
 for workflow in (ci, release):
     folded = workflow.casefold()
-    for forbidden in ("@main", "github.actor", "dependabot[bot]", "renovate", "claude"):
+    for forbidden in (
+        "@main",
+        "github.actor",
+        "dependabot[bot]",
+        "renovate",
+        "claude",
+        "requires-private-library",
+        "private-library-client-id",
+        "private-library-revision",
+        "private_library_private_key",
+        "groovemap_ci_app_client_id",
+        "groovemap_ci_app_private_key",
+    ):
         assert forbidden not in folded, f"forbidden workflow exception or mutable reference: {forbidden}"
+
+pyproject = (ROOT / "pyproject.toml").read_text()
+assert "https://github.com/groovemap-music/python-libraries.git" in pyproject
+assert PYTHON_LIBRARIES_REVISION in pyproject
 
 require(dependabot, "package-ecosystem: github-actions", "package-ecosystem: uv", "labels: [dependencies, github-actions]")
 assert "renovate" not in dependabot.casefold()
