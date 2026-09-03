@@ -15,22 +15,75 @@ Configuration via environment variables:
 
 import sys
 
-# These annotation types stay available at runtime because the MCP SDK inspects
-# tool and lifespan annotations when registering handlers under Python 3.14.
-from collections.abc import AsyncIterator  # noqa: TC003
+# AsyncIterator stays available at runtime because the MCP SDK inspects lifespan
+# annotations when registering handlers under Python 3.14. Awaitable/Callable back
+# the _ToolHandler runtime type alias below, so they are genuinely used at runtime too.
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from functools import wraps
 from os import getenv
+from time import perf_counter
 from typing import Any
 from urllib.parse import quote as _url_quote
 
 import httpx
 import structlog
+from common import get_meter, instrument_httpx, setup_telemetry, shutdown_telemetry
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context  # noqa: TC002
 
 
 logger = structlog.get_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# Telemetry: one meter for the whole package, instruments created once at import.
+# ---------------------------------------------------------------------------
+
+_meter = get_meter("groovemap.mcp-server")
+_tool_calls = _meter.create_counter(
+    "groovemap.mcp.tool.calls",
+    description="MCP tool invocations",
+)
+_tool_duration = _meter.create_histogram(
+    "groovemap.mcp.tool.duration",
+    unit="s",
+    description="MCP tool call duration",
+)
+
+_ToolHandler = Callable[..., Awaitable[dict[str, Any]]]
+
+
+def _instrumented(tool_name: str) -> Callable[[_ToolHandler], _ToolHandler]:
+    """Record groovemap.mcp.tool.calls/duration {tool, outcome} around a tool handler.
+
+    outcome is "error" when the handler raises or returns an {"error": ...} dict
+    (the shape _api_get/_api_post return on failure instead of raising), "success"
+    otherwise. Wraps the plain async function before @mcp.tool() registers it, so
+    every call reaching the handler through the MCP protocol is measured.
+    """
+
+    def decorator(func: _ToolHandler) -> _ToolHandler:
+        @wraps(func)
+        async def wrapper(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            start = perf_counter()
+            try:
+                result = await func(*args, **kwargs)
+            except Exception:
+                duration = perf_counter() - start
+                _tool_calls.add(1, {"tool": tool_name, "outcome": "error"})
+                _tool_duration.record(duration, {"tool": tool_name})
+                raise
+            duration = perf_counter() - start
+            outcome = "error" if isinstance(result, dict) and "error" in result else "success"
+            _tool_calls.add(1, {"tool": tool_name, "outcome": outcome})
+            _tool_duration.record(duration, {"tool": tool_name})
+            return result
+
+        return wrapper
+
+    return decorator
+
 
 _VALID_ENTITY_TYPES = frozenset({"artist", "genre", "label", "style"})
 _VALID_SEARCH_TYPES = frozenset({"artist", "label", "master", "release"})
@@ -62,6 +115,10 @@ async def app_lifespan(server: MCPServer) -> AsyncIterator[AppContext]:  # noqa:
     base_url = getenv("API_BASE_URL", "http://localhost:8004")
 
     async with httpx.AsyncClient(timeout=30.0) as client:
+        # setup_telemetry() runs before app_lifespan (see main()), so instrument_httpx
+        # binds to the configured provider. It is a no-op returning False without the
+        # 'otel-http' extra or before setup_telemetry has installed a live provider.
+        instrument_httpx(client)
         logger.info("🚀 MCP server ready", api_base_url=base_url)
         yield AppContext(client=client, base_url=base_url)
         logger.info("👋 MCP server shut down")
@@ -163,6 +220,7 @@ async def _call_shared_find_path(app: AppContext, **kwargs: Any) -> dict[str, An
 
 
 @mcp.tool()
+@_instrumented("search")
 async def search(
     ctx: Context[AppContext, Any],
     query: str,
@@ -204,6 +262,7 @@ async def search(
 
 
 @mcp.tool()
+@_instrumented("get_artist_details")
 async def get_artist_details(
     ctx: Context[AppContext, Any],
     artist_id: str,
@@ -223,6 +282,7 @@ async def get_artist_details(
 
 
 @mcp.tool()
+@_instrumented("get_label_details")
 async def get_label_details(
     ctx: Context[AppContext, Any],
     label_id: str,
@@ -242,6 +302,7 @@ async def get_label_details(
 
 
 @mcp.tool()
+@_instrumented("get_release_details")
 async def get_release_details(
     ctx: Context[AppContext, Any],
     release_id: str,
@@ -261,6 +322,7 @@ async def get_release_details(
 
 
 @mcp.tool()
+@_instrumented("get_genre_details")
 async def get_genre_details(
     ctx: Context[AppContext, Any],
     genre_name: str,
@@ -277,6 +339,7 @@ async def get_genre_details(
 
 
 @mcp.tool()
+@_instrumented("get_style_details")
 async def get_style_details(
     ctx: Context[AppContext, Any],
     style_name: str,
@@ -298,6 +361,7 @@ async def get_style_details(
 
 
 @mcp.tool()
+@_instrumented("find_path")
 async def find_path(
     ctx: Context[AppContext, Any],
     from_name: str,
@@ -345,6 +409,7 @@ async def find_path(
 
 
 @mcp.tool()
+@_instrumented("get_trends")
 async def get_trends(
     ctx: Context[AppContext, Any],
     name: str,
@@ -379,6 +444,7 @@ async def get_trends(
 
 
 @mcp.tool()
+@_instrumented("get_graph_stats")
 async def get_graph_stats(
     ctx: Context[AppContext, Any],
 ) -> dict[str, Any]:
@@ -397,6 +463,7 @@ async def get_graph_stats(
 
 
 @mcp.tool()
+@_instrumented("get_collaborators")
 async def get_collaborators(
     ctx: Context[AppContext, Any],
     artist_id: str,
@@ -427,6 +494,7 @@ async def get_collaborators(
 
 
 @mcp.tool()
+@_instrumented("get_genre_tree")
 async def get_genre_tree(
     ctx: Context[AppContext, Any],
 ) -> dict[str, Any]:
@@ -446,6 +514,7 @@ async def get_genre_tree(
 
 
 @mcp.tool()
+@_instrumented("nlq_query")
 async def nlq_query(
     ctx: Context[AppContext, Any],
     query: str,
@@ -487,13 +556,21 @@ def main() -> None:
     if transport not in _VALID_TRANSPORTS:
         transport = "stdio"
 
-    # v2 overloads `run` per transport, each with its own keyword set, so a `str`
-    # matches no variant. Branch on the validated value instead of casting — this
-    # keeps the call type-checked rather than silencing it.
-    if transport == "streamable-http":
-        mcp.run(transport="streamable-http")
-    else:
-        mcp.run(transport="stdio")
+    # setup_telemetry never fails startup: with OTEL_EXPORTER_OTLP_ENDPOINT unset it
+    # installs a no-op MeterProvider and the service behaves exactly as before. The
+    # try/finally ensures shutdown_telemetry flushes even a short stdio session, whose
+    # process would otherwise exit before the periodic exporter's next push.
+    setup_telemetry("mcp-server")
+    try:
+        # v2 overloads `run` per transport, each with its own keyword set, so a `str`
+        # matches no variant. Branch on the validated value instead of casting — this
+        # keeps the call type-checked rather than silencing it.
+        if transport == "streamable-http":
+            mcp.run(transport="streamable-http")
+        else:
+            mcp.run(transport="stdio")
+    finally:
+        shutdown_telemetry()
 
 
 if __name__ == "__main__":
