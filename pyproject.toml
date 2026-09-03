@@ -22,6 +22,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 dependencies = [
     "groovemap-agent-tools==0.1.0",
+    "groovemap-runtime[otel,otel-http]==0.1.0",
     "httpx>=0.28.1",
     "mcp[cli]>=2.0.0",
     "structlog>=26.1.0",
@@ -58,8 +59,8 @@ packages = ["mcp_server"]
 exclude-newer = "2 days"
 
 [tool.uv.sources]
-groovemap-agent-tools = { git = "https://github.com/groovemap-music/python-libraries.git", rev = "28fa329702bc76896cc54ab8d05ec5b1bd3d929e", subdirectory = "agent-tools" }
-groovemap-runtime = { git = "https://github.com/groovemap-music/python-libraries.git", rev = "28fa329702bc76896cc54ab8d05ec5b1bd3d929e" }
+groovemap-agent-tools = { git = "https://github.com/groovemap-music/python-libraries.git", rev = "3c8309bfb6123b2c85107e949e9d626e3193db6d", subdirectory = "agent-tools" }
+groovemap-runtime = { git = "https://github.com/groovemap-music/python-libraries.git", rev = "3c8309bfb6123b2c85107e949e9d626e3193db6d" }
 
 [tool.ruff]
 line-length = 150

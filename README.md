@@ -85,6 +85,14 @@ The authentication boundary is outside this adapter: the current server sends no
 API credential and configures no hosted ingress protection. Keep both hops within a trusted
 boundary unless `deployment` supplies those controls.
 
+## Observability
+
+The server pushes OpenTelemetry metrics over OTLP/HTTP when `OTEL_EXPORTER_OTLP_ENDPOINT`
+is set; with it unset, telemetry is a no-op and the server behaves exactly as it does today.
+Every tool call is recorded as `groovemap.mcp.tool.calls` and `groovemap.mcp.tool.duration`;
+Catalog API requests are instrumented via `instrument_httpx`. See
+[configuration](docs/configuration.md#opentelemetry-metrics) for the environment variables.
+
 ## Develop
 
 ```bash
