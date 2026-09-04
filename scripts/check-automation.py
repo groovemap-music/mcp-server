@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 AUTOMATION_REVISION = "7db8b4c535c79329e3821e32177932b4f9059253"
-PYTHON_LIBRARIES_REVISION = "3c8309bfb6123b2c85107e949e9d626e3193db6d"
+PYTHON_LIBRARIES_REVISION = "41805b62520785f412e8f5d0db90f8d83838ec56"
 
 
 def require(text: str, *fragments: str) -> None:
