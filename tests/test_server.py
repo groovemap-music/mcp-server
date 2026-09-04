@@ -101,6 +101,82 @@ class TestSearch:
         call_params = app_ctx.client.get.call_args.kwargs["params"]
         assert call_params["limit"] == 100
 
+    @pytest.mark.asyncio
+    async def test_search_forwards_a_validated_media_filter(self, mock_context, app_ctx):
+        """httpx serializes a list param as repeated `media` query parameters."""
+        from mcp_server.server import search
+
+        app_ctx.client.get = AsyncMock(return_value=_mock_response({"total": 0, "results": []}))
+
+        await search(query="test", media=["vinyl", "optical_cd"], ctx=mock_context)
+
+        call_params = app_ctx.client.get.call_args.kwargs["params"]
+        assert call_params["media"] == ["vinyl", "optical_cd"]
+
+    @pytest.mark.asyncio
+    async def test_search_omits_media_when_not_given(self, mock_context, app_ctx):
+        from mcp_server.server import search
+
+        app_ctx.client.get = AsyncMock(return_value=_mock_response({"total": 0, "results": []}))
+
+        await search(query="test", ctx=mock_context)
+
+        call_params = app_ctx.client.get.call_args.kwargs["params"]
+        assert "media" not in call_params
+
+    @pytest.mark.asyncio
+    async def test_search_rejects_unknown_media_id(self, mock_context, app_ctx):
+        from mcp_server.server import search
+
+        app_ctx.client.get = AsyncMock()
+
+        result = await search(query="test", media=["laserdisk"], ctx=mock_context)
+
+        assert "error" in result
+        assert "laserdisk" in result["error"]
+        assert "vinyl" in result["error"]
+        app_ctx.client.get.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_search_media_error_names_every_unknown_id(self, mock_context, app_ctx):
+        from mcp_server.server import search
+
+        app_ctx.client.get = AsyncMock()
+
+        result = await search(query="test", media=["vinyl", "laserdisk", "betamax"], ctx=mock_context)
+
+        assert "betamax" in result["error"]
+        assert "laserdisk" in result["error"]
+        app_ctx.client.get.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_search_error_lists_the_generated_family_ids(self, mock_context, app_ctx):
+        """The `Valid families` list in the error is the taxonomy's, not a hand-copied one."""
+        from common.media import family_ids
+
+        from mcp_server.server import search
+
+        app_ctx.client.get = AsyncMock()
+
+        result = await search(query="test", media=["laserdisk"], ctx=mock_context)
+
+        assert f"Valid families: {', '.join(family_ids())}." in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_exposed_tool_description_lists_the_generated_family_ids(self):
+        """The registered MCP tool schema description must match `common.media.family_ids()`
+
+        exactly, not a hardcoded copy that can drift from the taxonomy.
+        """
+        from common.media import family_ids
+
+        from mcp_server.server import mcp
+
+        tools = await mcp.list_tools()
+        search_tool = next(t for t in tools if t.name == "search")
+
+        assert f"Valid families: {', '.join(family_ids())}." in search_tool.description
+
 
 # ---------------------------------------------------------------------------
 # Tools: entity details
@@ -198,6 +274,53 @@ class TestGetReleaseDetails:
 
         assert result["name"] == "Kind of Blue"
         assert result["year"] == 1959
+
+    @pytest.mark.asyncio
+    async def test_passes_through_the_media_block_unaltered(self, mock_context, app_ctx):
+        """The tool is a pass-through: an ADR 0007 media block from the API reaches the caller as-is."""
+        from mcp_server.server import get_release_details
+
+        media_block = {
+            "taxonomy_version": "1",
+            "items": [
+                {
+                    "family": "vinyl",
+                    "medium": "vinyl_12",
+                    "qty": 1,
+                    "size_inches": 12,
+                    "speed_rpm": 33,
+                    "channels": "stereo",
+                    "codec": None,
+                    "variants": [],
+                    "appearance": [],
+                    "position": None,
+                    "track_count": None,
+                    "source": {"provider": "discogs", "name": "Vinyl", "descriptions": ["LP"], "text": None},
+                }
+            ],
+            "families": ["vinyl"],
+            "release_kind": "album",
+            "traits": [],
+            "edition": [],
+            "packaging": None,
+            "container": None,
+            "flags": [],
+            "unmapped": {"formats": [], "descriptions": []},
+        }
+        fake = {"id": "1", "name": "Kind of Blue", "media": media_block}
+        app_ctx.client.get = AsyncMock(return_value=_mock_response(fake))
+
+        result = await get_release_details(release_id="1", ctx=mock_context)
+
+        assert result["media"] == media_block
+
+    def test_docstring_documents_the_media_block_shape(self):
+        """The documented fields must match `common.agent_tools.schemas.MediaBlock`."""
+        from mcp_server.server import get_release_details
+
+        doc = get_release_details.__doc__ or ""
+        for field in ("media", "families", "items", "release_kind", "edition", "unmapped"):
+            assert field in doc, f"get_release_details docstring is missing the `{field}` field"
 
     @pytest.mark.asyncio
     async def test_not_found(self, mock_context, app_ctx):

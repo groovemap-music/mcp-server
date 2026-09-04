@@ -30,6 +30,8 @@ from urllib.parse import quote as _url_quote
 import httpx
 import structlog
 from common import get_meter, instrument_httpx, setup_telemetry, shutdown_telemetry
+from common.agent_tools.discovery import validate_media_filter
+from common.media import family_ids
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context  # noqa: TC002
 
@@ -87,6 +89,9 @@ def _instrumented(tool_name: str) -> Callable[[_ToolHandler], _ToolHandler]:
 
 _VALID_ENTITY_TYPES = frozenset({"artist", "genre", "label", "style"})
 _VALID_SEARCH_TYPES = frozenset({"artist", "label", "master", "release"})
+# The ADR 0007 media taxonomy's family ids, computed once at import time. Every family also
+# has medium ids beneath it (e.g. vinyl_12 under vinyl); `search`'s media filter accepts both.
+_MEDIA_FAMILIES = family_ids()
 
 
 def _validate_numeric_id(value: str, name: str) -> dict[str, Any] | None:
@@ -219,12 +224,11 @@ async def _call_shared_find_path(app: AppContext, **kwargs: Any) -> dict[str, An
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
-@_instrumented("search")
-async def search(
+async def _search(
     ctx: Context[AppContext, Any],
     query: str,
     types: str = "artist,label,master,release",
+    media: list[str] | None = None,
     limit: int = 20,
 ) -> dict[str, Any]:
     """Search the music database across artists, labels, masters, and releases.
@@ -235,6 +239,12 @@ async def search(
     Args:
         query: Search terms (minimum 3 characters).
         types: Comma-separated entity types to search (artist, label, master, release).
+        media: Optional family or medium ids (ADR 0007 canonical media taxonomy) to narrow
+            release results to specific media — for example ["cassette"] would not match
+            since "cassette" isn't a taxonomy id, but ["tape"] matches every tape medium and
+            ["optical_cd"] matches CD only. Valid families: {families}. Each family also has
+            narrower medium ids beneath it (e.g. vinyl_12, optical_cd). An unknown id returns
+            an error naming it.
         limit: Maximum results to return (1-100, default 20).
     """
     requested = [t.strip().lower() for t in types.split(",") if t.strip()]
@@ -244,16 +254,30 @@ async def search(
     if invalid:
         return {"error": f"Invalid type(s): {', '.join(invalid)}. Valid: {', '.join(_VALID_SEARCH_TYPES)}"}
 
+    params: dict[str, Any] = {
+        "q": query,
+        "types": ",".join(requested),
+        "limit": min(max(limit, 1), 100),
+    }
+    if media:
+        try:
+            params["media"] = validate_media_filter(media)
+        except ValueError as exc:
+            return {"error": f"{exc} Valid families: {', '.join(_MEDIA_FAMILIES)}."}
+
     app = _ctx(ctx)
-    return await _api_get(
-        app,
-        "/api/search",
-        {
-            "q": query,
-            "types": ",".join(requested),
-            "limit": min(max(limit, 1), 100),
-        },
-    )
+    return await _api_get(app, "/api/search", params)
+
+
+# The `Valid families: {families}` placeholder above is filled in from `_MEDIA_FAMILIES`
+# here, before the tool is registered, so the MCP schema description the client sees — and
+# `search.__doc__` for anyone reading the source — both come from the one taxonomy call
+# instead of a hand-copied list that can drift from it. Decorators are applied by hand
+# (rather than as `@mcp.tool()` / `@_instrumented("search")` above the def) because the
+# docstring has to be formatted first; `name="search"` restores the registered tool name
+# that `_search`'s own `__name__` would otherwise give it.
+_search.__doc__ = (_search.__doc__ or "").format(families=", ".join(_MEDIA_FAMILIES))
+search = mcp.tool(name="search")(_instrumented("search")(_search))
 
 
 # ---------------------------------------------------------------------------
@@ -309,8 +333,18 @@ async def get_release_details(
 ) -> dict[str, Any]:
     """Get detailed information about a release (album, single, etc.).
 
-    Returns the title, year, artists, labels, genres, and styles.
-    Use 'search' first to find the release's ID.
+    Returns the title, year, artists, labels, genres, and styles. When the release has media
+    data, the response also carries a top-level `media` block — the ADR 0007 canonical media
+    taxonomy's shape, additive to the fields above:
+      - `families`: sorted family ids the release's media belong to (e.g. ["vinyl"]).
+      - `items`: one entry per physical or digital medium, each with `family`, `medium`
+        (e.g. "vinyl_12"), `qty`, and attributes such as `size_inches`, `speed_rpm`,
+        `channels`, `codec`, `variants`, and `appearance`.
+      - `release_kind`: "album", "single", "ep", "broadcast", "other", or null.
+      - `edition`: edition facts such as "reissue", "remastered", "limited", "promo".
+      - `unmapped`: raw provider values the taxonomy did not recognize, kept for coverage.
+    Use the `media` filter on 'search' to find cassette-only or CD-only releases before
+    calling this tool. Use 'search' first to find the release's ID.
 
     Args:
         release_id: The Discogs release ID (numeric string).
