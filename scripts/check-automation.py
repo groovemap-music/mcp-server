@@ -76,7 +76,14 @@ pyproject = (ROOT / "pyproject.toml").read_text()
 assert "https://github.com/groovemap-music/python-libraries.git" in pyproject
 assert PYTHON_LIBRARIES_REVISION in pyproject
 
-require(dependabot, "package-ecosystem: github-actions", "package-ecosystem: uv", "labels: [dependencies, github-actions]")
+require(
+    dependabot,
+    "package-ecosystem: github-actions",
+    "package-ecosystem: uv",
+    "package-ecosystem: docker",
+    "labels: [dependencies, github-actions]",
+    "labels: [dependencies, docker]",
+)
 assert "renovate" not in dependabot.casefold()
 
 require(
