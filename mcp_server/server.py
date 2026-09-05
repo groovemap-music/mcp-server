@@ -29,17 +29,19 @@ from urllib.parse import quote as _url_quote
 
 import httpx
 import structlog
-from common import get_meter, instrument_httpx, setup_telemetry, shutdown_telemetry
+from common import get_meter, get_tracer, instrument_httpx, setup_telemetry, shutdown_telemetry, start_event_loop_monitor
 from common.agent_tools.discovery import validate_media_filter
 from common.media import family_ids
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context  # noqa: TC002
+from opentelemetry.trace import Status, StatusCode
 
 
 logger = structlog.get_logger(__name__)
 
 # ---------------------------------------------------------------------------
-# Telemetry: one meter for the whole package, instruments created once at import.
+# Telemetry: one meter and one tracer for the whole package, instruments created
+# once at import.
 # ---------------------------------------------------------------------------
 
 _meter = get_meter("groovemap.mcp-server")
@@ -53,34 +55,60 @@ _tool_duration = _meter.create_histogram(
     description="MCP tool call duration",
 )
 
+# Both handles are proxies before setup_telemetry() installs the real providers, and both
+# rebind to them afterwards, so binding them at import costs nothing and keeps every module
+# in this package reporting under one instrumentation scope.
+_tracer = get_tracer("groovemap.mcp-server")
+
 _ToolHandler = Callable[..., Awaitable[dict[str, Any]]]
 
 
 def _instrumented(tool_name: str) -> Callable[[_ToolHandler], _ToolHandler]:
-    """Record groovemap.mcp.tool.calls/duration {tool, outcome} around a tool handler.
+    """Wrap a tool handler in an `mcp.tool {tool}` span and its call/duration metrics.
 
-    outcome is "error" when the handler raises or returns an {"error": ...} dict
-    (the shape _api_get/_api_post return on failure instead of raising), "success"
-    otherwise. Wraps the plain async function before @mcp.tool() registers it, so
-    every call reaching the handler through the MCP protocol is measured.
+    Records groovemap.mcp.tool.calls/duration {tool, outcome}. outcome is "error" when the
+    handler raises or returns an {"error": ...} dict (the shape _api_get/_api_post return on
+    failure instead of raising), "success" otherwise. Wraps the plain async function before
+    @mcp.tool() registers it, so every call reaching the handler through the MCP protocol is
+    both measured and traced.
+
+    The span is the trace root: a stdio MCP session carries no inbound trace context, so this
+    is where a GrooveMap trace begins. It stays current for the whole handler, which is what
+    makes the Catalog API request instrument_httpx() traces a child span carrying traceparent
+    into catalog-api. The span name is the low-cardinality `mcp.tool {tool}` — tool comes from
+    the closed set of registered tool names, never from an argument.
+
+    A raised exception sets span status ERROR with error.type only, per the GrooveMap span
+    conventions: no message, no stack trace, no payload. That is why the span opts out of the
+    SDK's own exception handling — record_exception would attach an event carrying the message
+    and traceback, and set_status_on_exception would put the message in the status description.
+    An {"error": ...} result is a normal MCP response carrying a failure the tool handled, so it
+    is reported through the outcome attribute and leaves the span status unset.
     """
+    span_name = f"mcp.tool {tool_name}"
 
     def decorator(func: _ToolHandler) -> _ToolHandler:
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> dict[str, Any]:
             start = perf_counter()
-            try:
-                result = await func(*args, **kwargs)
-            except Exception:
+            with _tracer.start_as_current_span(span_name, record_exception=False, set_status_on_exception=False) as span:
+                span.set_attribute("tool", tool_name)
+                try:
+                    result = await func(*args, **kwargs)
+                except Exception as exc:
+                    duration = perf_counter() - start
+                    _tool_calls.add(1, {"tool": tool_name, "outcome": "error"})
+                    _tool_duration.record(duration, {"tool": tool_name})
+                    span.set_attribute("outcome", "error")
+                    span.set_attribute("error.type", type(exc).__name__)
+                    span.set_status(Status(StatusCode.ERROR))
+                    raise
                 duration = perf_counter() - start
-                _tool_calls.add(1, {"tool": tool_name, "outcome": "error"})
+                outcome = "error" if isinstance(result, dict) and "error" in result else "success"
+                _tool_calls.add(1, {"tool": tool_name, "outcome": outcome})
                 _tool_duration.record(duration, {"tool": tool_name})
-                raise
-            duration = perf_counter() - start
-            outcome = "error" if isinstance(result, dict) and "error" in result else "success"
-            _tool_calls.add(1, {"tool": tool_name, "outcome": outcome})
-            _tool_duration.record(duration, {"tool": tool_name})
-            return result
+                span.set_attribute("outcome", outcome)
+                return result
 
         return wrapper
 
@@ -124,6 +152,11 @@ async def app_lifespan(server: MCPServer) -> AsyncIterator[AppContext]:  # noqa:
         # binds to the configured provider. It is a no-op returning False without the
         # 'otel-http' extra or before setup_telemetry has installed a live provider.
         instrument_httpx(client)
+        # The transport owns the loop — mcp.run() creates it, and the lifespan is the first
+        # place in this process that runs inside it — so this is where the event-loop lag
+        # sampler can be started. It returns None (and logs one line) whenever there is
+        # nothing to sample into, and shutdown_telemetry() cancels it on the way out.
+        start_event_loop_monitor()
         logger.info("🚀 MCP server ready", api_base_url=base_url)
         yield AppContext(client=client, base_url=base_url)
         logger.info("👋 MCP server shut down")
@@ -591,9 +624,11 @@ def main() -> None:
         transport = "stdio"
 
     # setup_telemetry never fails startup: with OTEL_EXPORTER_OTLP_ENDPOINT unset it
-    # installs a no-op MeterProvider and the service behaves exactly as before. The
-    # try/finally ensures shutdown_telemetry flushes even a short stdio session, whose
-    # process would otherwise exit before the periodic exporter's next push.
+    # installs no-op meter and tracer providers and the service behaves exactly as before.
+    # The try/finally ensures shutdown_telemetry force-flushes and shuts down BOTH providers
+    # even on a short stdio session, whose process would otherwise exit before the periodic
+    # metric reader's next push and with the batch span processor still holding finished
+    # spans. It also cancels the event-loop monitor started in app_lifespan.
     setup_telemetry("mcp-server")
     try:
         # v2 overloads `run` per transport, each with its own keyword set, so a `str`

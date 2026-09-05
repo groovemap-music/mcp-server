@@ -1,20 +1,33 @@
-"""Tests for the OTEL instrumentation added by gm-mcp-server-664.1.
+"""Tests for the OTEL instrumentation added by gm-mcp-server-664.1 and gm-mcp-server-qv3.1.
 
-Covers the `_instrumented` decorator applied to every `@mcp.tool()` handler, the
-`instrument_httpx` call site in `app_lifespan`, and the `setup_telemetry` /
-`shutdown_telemetry` bracket in `main()`. Domain-instrument assertions use an
-in-memory metric reader instead of a real OTLP exporter.
+Covers the `_instrumented` decorator applied to every `@mcp.tool()` handler — both the
+`groovemap.mcp.tool.*` metrics and the `mcp.tool {tool}` root span it opens — the
+`instrument_httpx` and `start_event_loop_monitor` call sites in `app_lifespan`, and the
+`setup_telemetry` / `shutdown_telemetry` bracket in `main()`. Domain-signal assertions use
+the in-memory metric reader and span exporter instead of a real OTLP exporter.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
+from common import telemetry
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import InMemoryMetricReader
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import SpanKind, StatusCode
+
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from opentelemetry.sdk.trace import ReadableSpan
 
 
 # ---------------------------------------------------------------------------
@@ -39,6 +52,47 @@ def metric_reader(monkeypatch: pytest.MonkeyPatch) -> InMemoryMetricReader:
     monkeypatch.setattr(server, "_tool_calls", tool_calls)
     monkeypatch.setattr(server, "_tool_duration", tool_duration)
     return reader
+
+
+class SpanCollector:
+    """An in-memory tracer provider whose finished spans can be read back by name."""
+
+    def __init__(self) -> None:
+        self.exporter = InMemorySpanExporter()
+        self.provider = TracerProvider()
+        self.provider.add_span_processor(SimpleSpanProcessor(self.exporter))
+
+    def spans(self) -> tuple[ReadableSpan, ...]:
+        return self.exporter.get_finished_spans()
+
+    def named(self, name: str) -> list[ReadableSpan]:
+        return [span for span in self.spans() if span.name == name]
+
+    def only(self, name: str) -> ReadableSpan:
+        matching = self.named(name)
+        assert len(matching) == 1, f"expected exactly one {name!r} span, saw {[span.name for span in self.spans()]}"
+        return matching[0]
+
+    def of_kind(self, kind: SpanKind) -> list[ReadableSpan]:
+        return [span for span in self.spans() if span.kind is kind]
+
+
+@pytest.fixture()
+def spans(monkeypatch: pytest.MonkeyPatch) -> Iterator[SpanCollector]:
+    """Record every span the server opens into an in-memory exporter.
+
+    Binds both ends the same way the runtime does: `mcp_server.server._tracer` is the handle
+    the tool decorator opens spans through, and `common.telemetry._tracer_provider` is what
+    `instrument_httpx` reads, so the Catalog API client span lands in the same provider as
+    the tool span it should be a child of.
+    """
+    import mcp_server.server as server
+
+    collector = SpanCollector()
+    monkeypatch.setattr(telemetry, "_tracer_provider", collector.provider)
+    monkeypatch.setattr(server, "_tracer", collector.provider.get_tracer("groovemap.mcp-server"))
+    yield collector
+    monkeypatch.setattr(telemetry, "_tracer_provider", None)
 
 
 @pytest.fixture()
@@ -333,3 +387,202 @@ class TestOtelDisabledRegression:
 
         counter = _meter.create_counter("groovemap.mcp.tool.calls")
         counter.add(1, {"tool": "search", "outcome": "success"})  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# _instrumented: the `mcp.tool {tool}` root span
+# ---------------------------------------------------------------------------
+
+
+class TestToolSpans:
+    @pytest.mark.asyncio
+    async def test_tool_call_opens_an_mcp_tool_root_span(self, spans: SpanCollector, mock_context: Any, app_ctx: Any) -> None:
+        """The span name is the low-cardinality `mcp.tool {tool}`, and it starts a new trace."""
+        from mcp_server.server import get_graph_stats
+
+        app_ctx.client.get = AsyncMock(return_value=_mock_response({"artists": 1}))
+
+        await get_graph_stats(ctx=mock_context)
+
+        span = spans.only("mcp.tool get_graph_stats")
+        assert span.parent is None
+        assert span.kind is SpanKind.INTERNAL
+        assert dict(span.attributes or {}) == {"tool": "get_graph_stats", "outcome": "success"}
+        assert span.status.status_code is not StatusCode.ERROR
+
+    @pytest.mark.asyncio
+    async def test_error_dict_result_records_outcome_error_without_failing_the_span(
+        self, spans: SpanCollector, mock_context: Any, app_ctx: Any
+    ) -> None:
+        """An {"error": ...} body is a handled MCP response, so only `outcome` reports it."""
+        from mcp_server.server import search
+
+        result = await search(query="test", types="invalid", ctx=mock_context)
+        assert "error" in result
+        app_ctx.client.get.assert_not_called()
+
+        span = spans.only("mcp.tool search")
+        assert dict(span.attributes or {}) == {"tool": "search", "outcome": "error"}
+        assert span.status.status_code is not StatusCode.ERROR
+
+    @pytest.mark.asyncio
+    async def test_raised_exception_sets_error_status_and_error_type_only(self, spans: SpanCollector) -> None:
+        """Span conventions: status ERROR with error.type, never a message or a stack trace."""
+        from mcp_server.server import _instrumented
+
+        @_instrumented("fake_tool")
+        async def handler() -> dict[str, Any]:
+            raise ValueError("kaboom")
+
+        with pytest.raises(ValueError, match="kaboom"):
+            await handler()
+
+        span = spans.only("mcp.tool fake_tool")
+        assert dict(span.attributes or {}) == {"tool": "fake_tool", "outcome": "error", "error.type": "ValueError"}
+        assert span.status.status_code is StatusCode.ERROR
+        assert span.status.description is None
+        assert span.events == ()
+
+    @pytest.mark.asyncio
+    async def test_catalog_api_request_is_a_child_span_carrying_traceparent(self, spans: SpanCollector, mock_context: Any, app_ctx: Any) -> None:
+        """The outbound Catalog API call continues the tool's trace into catalog-api.
+
+        Uses a real httpx.AsyncClient over a MockTransport so the httpx instrumentation the
+        server installs through instrument_httpx() actually runs: it is what opens the CLIENT
+        span and writes `traceparent` onto the request.
+        """
+        import mcp_server.server as server
+        from mcp_server.server import get_graph_stats
+
+        seen: list[httpx.Headers] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request.headers)
+            return httpx.Response(200, json={"artists": 1})
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=1.0)
+        assert server.instrument_httpx(client) is True
+        try:
+            app_ctx.client = client
+            async with client:
+                result = await get_graph_stats(ctx=mock_context)
+        finally:
+            HTTPXClientInstrumentor.uninstrument_client(client)
+
+        assert result == {"artists": 1}
+
+        tool_span = spans.only("mcp.tool get_graph_stats")
+        client_spans = spans.of_kind(SpanKind.CLIENT)
+        assert len(client_spans) == 1
+        client_span = client_spans[0]
+
+        assert client_span.parent is not None
+        assert client_span.parent.span_id == tool_span.context.span_id
+        assert client_span.context.trace_id == tool_span.context.trace_id
+
+        assert len(seen) == 1
+        traceparent = seen[0]["traceparent"]
+        assert format(tool_span.context.trace_id, "032x") in traceparent
+
+
+# ---------------------------------------------------------------------------
+# app_lifespan: the event-loop monitor
+# ---------------------------------------------------------------------------
+
+
+class TestAppLifespanStartsEventLoopMonitor:
+    @pytest.mark.asyncio
+    async def test_monitor_is_started_from_the_transport_loop_after_instrumentation(self) -> None:
+        """mcp.run() owns the loop, so the lifespan is the first place inside it that can sample."""
+        import mcp_server.server as server
+
+        order: list[str] = []
+        with (
+            patch.object(server, "instrument_httpx", side_effect=lambda _client: order.append("instrument_httpx")),
+            patch.object(server, "start_event_loop_monitor", side_effect=lambda: order.append("start_event_loop_monitor")) as monitor,
+        ):
+            async with server.app_lifespan(MagicMock()):
+                pass
+
+        monitor.assert_called_once_with()
+        assert order == ["instrument_httpx", "start_event_loop_monitor"]
+
+    @pytest.mark.asyncio
+    async def test_monitor_is_a_no_op_without_a_configured_provider(self) -> None:
+        """With telemetry unconfigured the library returns None; the lifespan must not care."""
+        import mcp_server.server as server
+
+        async with server.app_lifespan(MagicMock()) as ctx:
+            assert ctx.base_url
+
+
+# ---------------------------------------------------------------------------
+# main(): the stdio exit path force-flushes BOTH providers
+# ---------------------------------------------------------------------------
+
+
+class TestShutdownFlushesBothProviders:
+    def test_exit_force_flushes_and_shuts_down_traces_and_metrics(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A stdio session can end at any moment; neither signal may be left in a buffer."""
+        import mcp_server.server as server
+
+        meter_provider = MagicMock()
+        tracer_provider = MagicMock()
+        monkeypatch.setattr(telemetry, "_sdk_provider", meter_provider)
+        monkeypatch.setattr(telemetry, "_sdk_tracer_provider", tracer_provider)
+        monkeypatch.setattr(server.sys, "argv", ["groovemap-mcp"])
+        monkeypatch.setattr(server, "setup_telemetry", lambda _name: None)
+        monkeypatch.setattr(server.mcp, "run", MagicMock())
+
+        server.main()
+
+        tracer_provider.force_flush.assert_called_once()
+        tracer_provider.shutdown.assert_called_once()
+        meter_provider.force_flush.assert_called_once()
+        meter_provider.shutdown.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Endpoint set, traces off: metrics flow and nothing can emit a span
+# ---------------------------------------------------------------------------
+
+
+class TestTracesDisabledWithEndpointSet:
+    @pytest.mark.asyncio
+    async def test_metrics_flow_and_no_span_is_recorded(
+        self, monkeypatch: pytest.MonkeyPatch, metric_reader: InMemoryMetricReader, mock_context: Any, app_ctx: Any
+    ) -> None:
+        """OTEL_TRACES_EXPORTER=none turns tracing off on its own; metrics keep exporting.
+
+        Port 1 is never listening, so the OTLP exporter fails fast instead of holding the
+        shutdown flush open; nothing in this test depends on an export succeeding.
+        """
+        import mcp_server.server as server
+        from mcp_server.server import get_graph_stats
+
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:1")
+        monkeypatch.setenv("OTEL_TRACES_EXPORTER", "none")
+        monkeypatch.setenv("OTEL_METRIC_EXPORT_INTERVAL", "600000")
+
+        telemetry.shutdown_telemetry(timeout_s=0.1)
+        try:
+            provider = telemetry.setup_telemetry("mcp-server")
+
+            # Metrics half: a real SDK provider is installed, so measurements are exported.
+            assert isinstance(provider, MeterProvider)
+            assert telemetry._sdk_provider is not None
+
+            # Tracing half: no SDK tracer provider exists at all, so no span can reach an
+            # exporter, and the span the tool decorator opens is not even recorded.
+            assert telemetry._sdk_tracer_provider is None
+            monkeypatch.setattr(server, "_tracer", server.get_tracer("groovemap.mcp-server"))
+            with server._tracer.start_as_current_span("mcp.tool probe") as probe:
+                assert probe.is_recording() is False
+
+            app_ctx.client.get = AsyncMock(return_value=_mock_response({"artists": 7}))
+            assert await get_graph_stats(ctx=mock_context) == {"artists": 7}
+
+            calls = _data_points(metric_reader, "groovemap.mcp.tool.calls")
+            assert dict(calls[0].attributes) == {"tool": "get_graph_stats", "outcome": "success"}
+        finally:
+            telemetry.shutdown_telemetry(timeout_s=0.1)
