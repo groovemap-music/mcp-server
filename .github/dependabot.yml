@@ -14,3 +14,10 @@ updates:
       day: monday
     labels: [dependencies, python]
     open-pull-requests-limit: 10
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels: [dependencies, docker]
+    open-pull-requests-limit: 5
