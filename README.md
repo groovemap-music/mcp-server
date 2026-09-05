@@ -87,11 +87,25 @@ boundary unless `deployment` supplies those controls.
 
 ## Observability
 
-The server pushes OpenTelemetry metrics over OTLP/HTTP when `OTEL_EXPORTER_OTLP_ENDPOINT`
-is set; with it unset, telemetry is a no-op and the server behaves exactly as it does today.
-Every tool call is recorded as `groovemap.mcp.tool.calls` and `groovemap.mcp.tool.duration`;
-Catalog API requests are instrumented via `instrument_httpx`. See
-[configuration](docs/configuration.md#opentelemetry-metrics) for the environment variables.
+The server pushes OpenTelemetry metrics and traces over OTLP/HTTP when
+`OTEL_EXPORTER_OTLP_ENDPOINT` is set; with it unset, telemetry is a no-op and the server
+behaves exactly as it does today. Neither signal can fail startup or a tool call, and the exit
+path force-flushes both providers so even a short stdio session exports what it recorded.
+
+Every tool call is recorded as `groovemap.mcp.tool.calls` and `groovemap.mcp.tool.duration`
+`{tool, outcome}`, and runs inside an `mcp.tool {tool}` root span carrying the same two
+attributes. Catalog API requests are instrumented via `instrument_httpx`, so each one is a
+child of that span and carries `traceparent` into `catalog-api` — a single trace covers the
+agent's tool call and the API work behind it.
+
+The process view (`process.cpu.time`, `process.memory.usage`, `process.thread.count`,
+`process.open_file_descriptor.count`, `process.context_switches`, and the CPython
+garbage-collection counter) arrives with `setup_telemetry`. The server does run an asyncio
+loop — `mcp.run()` creates it for both transports — so the lifespan also starts
+`start_event_loop_monitor()`, which samples `groovemap.runtime.event_loop.lag`.
+
+See [configuration](docs/configuration.md#opentelemetry-metrics-and-traces) for the
+environment variables and the full span and metric list.
 
 ## Develop
 
