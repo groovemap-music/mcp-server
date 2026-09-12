@@ -44,8 +44,8 @@ Both signals are pushed over OTLP/HTTP-protobuf, never scraped: this server does
 
 ### Metrics
 
-`_api_get`/`_api_post` (the Catalog API client used by every tool) are instrumented via
-`instrument_httpx`, emitting `http.client.request.duration`. Every `@mcp.tool()` handler
+The lifespan-owned Catalog API client used by `catalog_api.api_get`/`api_post` is instrumented
+via `instrument_httpx`, emitting `http.client.request.duration`. Every registered tool handler
 additionally records `groovemap.mcp.tool.calls` (counter) and `groovemap.mcp.tool.duration`
 (histogram, seconds), both attributed with `tool` (the tool name) and, for the counter,
 `outcome` (`success` or `error`).

@@ -1,11 +1,4 @@
-"""Tests for the OTEL instrumentation added by gm-mcp-server-664.1 and gm-mcp-server-qv3.1.
-
-Covers the `_instrumented` decorator applied to every `@mcp.tool()` handler — both the
-`groovemap.mcp.tool.*` metrics and the `mcp.tool {tool}` root span it opens — the
-`instrument_httpx` and `start_event_loop_monitor` call sites in `app_lifespan`, and the
-`setup_telemetry` / `shutdown_telemetry` bracket in `main()`. Domain-signal assertions use
-the in-memory metric reader and span exporter instead of a real OTLP exporter.
-"""
+"""Tests for MCP tool telemetry and the server telemetry lifecycle."""
 
 from __future__ import annotations
 
@@ -37,20 +30,20 @@ if TYPE_CHECKING:
 
 @pytest.fixture()
 def metric_reader(monkeypatch: pytest.MonkeyPatch) -> InMemoryMetricReader:
-    """Point mcp_server.server's module-level instruments at a fresh in-memory reader.
+    """Point mcp_server.telemetry's instruments at a fresh in-memory reader.
 
     Builds a dedicated SDK MeterProvider per test instead of touching the process-wide
     OpenTelemetry provider, so tests stay isolated from each other and from whatever
     common.telemetry.setup_telemetry() has (or has not) installed globally.
     """
-    import mcp_server.server as server
+    import mcp_server.telemetry as server_telemetry
 
     reader = InMemoryMetricReader()
     meter = MeterProvider(metric_readers=[reader]).get_meter("groovemap.mcp-server")
     tool_calls = meter.create_counter("groovemap.mcp.tool.calls", description="MCP tool invocations")
     tool_duration = meter.create_histogram("groovemap.mcp.tool.duration", unit="s", description="MCP tool call duration")
-    monkeypatch.setattr(server, "_tool_calls", tool_calls)
-    monkeypatch.setattr(server, "_tool_duration", tool_duration)
+    monkeypatch.setattr(server_telemetry, "_tool_calls", tool_calls)
+    monkeypatch.setattr(server_telemetry, "_tool_duration", tool_duration)
     return reader
 
 
@@ -81,16 +74,16 @@ class SpanCollector:
 def spans(monkeypatch: pytest.MonkeyPatch) -> Iterator[SpanCollector]:
     """Record every span the server opens into an in-memory exporter.
 
-    Binds both ends the same way the runtime does: `mcp_server.server._tracer` is the handle
+    Binds both ends the same way the runtime does: `mcp_server.telemetry._tracer` is the handle
     the tool decorator opens spans through, and `common.telemetry._tracer_provider` is what
     `instrument_httpx` reads, so the Catalog API client span lands in the same provider as
     the tool span it should be a child of.
     """
-    import mcp_server.server as server
+    import mcp_server.telemetry as server_telemetry
 
     collector = SpanCollector()
     monkeypatch.setattr(telemetry, "_tracer_provider", collector.provider)
-    monkeypatch.setattr(server, "_tracer", collector.provider.get_tracer("groovemap.mcp-server"))
+    monkeypatch.setattr(server_telemetry, "_tracer", collector.provider.get_tracer("groovemap.mcp-server"))
     yield collector
     monkeypatch.setattr(telemetry, "_tracer_provider", None)
 
@@ -141,7 +134,7 @@ def _data_points(reader: InMemoryMetricReader, metric_name: str) -> list[Any]:
 class TestInstrumentedDecorator:
     @pytest.mark.asyncio
     async def test_records_success_outcome(self, metric_reader: InMemoryMetricReader) -> None:
-        from mcp_server.server import _instrumented
+        from mcp_server.telemetry import instrumented as _instrumented
 
         @_instrumented("fake_tool")
         async def handler() -> dict[str, Any]:
@@ -162,7 +155,7 @@ class TestInstrumentedDecorator:
 
     @pytest.mark.asyncio
     async def test_records_error_outcome_for_error_dict(self, metric_reader: InMemoryMetricReader) -> None:
-        from mcp_server.server import _instrumented
+        from mcp_server.telemetry import instrumented as _instrumented
 
         @_instrumented("fake_tool")
         async def handler() -> dict[str, Any]:
@@ -177,7 +170,7 @@ class TestInstrumentedDecorator:
 
     @pytest.mark.asyncio
     async def test_records_error_outcome_and_reraises_on_exception(self, metric_reader: InMemoryMetricReader) -> None:
-        from mcp_server.server import _instrumented
+        from mcp_server.telemetry import instrumented as _instrumented
 
         @_instrumented("fake_tool")
         async def handler() -> dict[str, Any]:
@@ -196,7 +189,7 @@ class TestInstrumentedDecorator:
 
     def test_preserves_wrapped_function_metadata(self) -> None:
         """mcp.tool() relies on the wrapped signature/docstring to build its JSON schema."""
-        from mcp_server.server import _instrumented
+        from mcp_server.telemetry import instrumented as _instrumented
 
         async def handler(x: int) -> dict[str, Any]:
             """Docstring the MCP SDK reads."""
@@ -383,7 +376,7 @@ class TestOtelDisabledRegression:
         """common.telemetry.get_meter() must hand back a working (no-op) meter before/without
         setup_telemetry, per the runtime contract — module import must never fail here.
         """
-        from mcp_server.server import _meter
+        from mcp_server.telemetry import _meter
 
         counter = _meter.create_counter("groovemap.mcp.tool.calls")
         counter.add(1, {"tool": "search", "outcome": "success"})  # must not raise
@@ -428,7 +421,7 @@ class TestToolSpans:
     @pytest.mark.asyncio
     async def test_raised_exception_sets_error_status_and_error_type_only(self, spans: SpanCollector) -> None:
         """Span conventions: status ERROR with error.type, never a message or a stack trace."""
-        from mcp_server.server import _instrumented
+        from mcp_server.telemetry import instrumented as _instrumented
 
         @_instrumented("fake_tool")
         async def handler() -> dict[str, Any]:
@@ -557,7 +550,7 @@ class TestTracesDisabledWithEndpointSet:
         Port 1 is never listening, so the OTLP exporter fails fast instead of holding the
         shutdown flush open; nothing in this test depends on an export succeeding.
         """
-        import mcp_server.server as server
+        import mcp_server.telemetry as server_telemetry
         from mcp_server.server import get_graph_stats
 
         monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:1")
@@ -575,8 +568,8 @@ class TestTracesDisabledWithEndpointSet:
             # Tracing half: no SDK tracer provider exists at all, so no span can reach an
             # exporter, and the span the tool decorator opens is not even recorded.
             assert telemetry._sdk_tracer_provider is None
-            monkeypatch.setattr(server, "_tracer", server.get_tracer("groovemap.mcp-server"))
-            with server._tracer.start_as_current_span("mcp.tool probe") as probe:
+            monkeypatch.setattr(server_telemetry, "_tracer", server_telemetry.get_tracer("groovemap.mcp-server"))
+            with server_telemetry._tracer.start_as_current_span("mcp.tool probe") as probe:
                 assert probe.is_recording() is False
 
             app_ctx.client.get = AsyncMock(return_value=_mock_response({"artists": 7}))

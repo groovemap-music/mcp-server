@@ -651,7 +651,7 @@ class TestGetGenreTree:
 class TestApiGet:
     @pytest.mark.asyncio
     async def test_api_get_constructs_url(self, app_ctx):
-        from mcp_server.server import _api_get
+        from mcp_server.catalog_api import api_get as _api_get
 
         app_ctx.client.get = AsyncMock(return_value=_mock_response({"ok": True}))
 
@@ -665,7 +665,7 @@ class TestApiGet:
     @pytest.mark.asyncio
     async def test_api_get_http_error_returns_error_dict(self, app_ctx):
         """HTTP error response (e.g. 500) returns error dict instead of raising."""
-        from mcp_server.server import _api_get
+        from mcp_server.catalog_api import api_get as _api_get
 
         error_response = MagicMock(spec=httpx.Response)
         error_response.status_code = 500
@@ -684,7 +684,7 @@ class TestApiGet:
     @pytest.mark.asyncio
     async def test_api_get_network_error_returns_error_dict(self, app_ctx):
         """Network error (e.g. ConnectError) returns error dict instead of raising."""
-        from mcp_server.server import _api_get
+        from mcp_server.catalog_api import api_get as _api_get
 
         app_ctx.client.get = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
 
@@ -698,7 +698,7 @@ class TestApiPost:
     @pytest.mark.asyncio
     async def test_api_post_http_error_returns_error_dict(self, app_ctx):
         """HTTP error response from POST returns error dict."""
-        from mcp_server.server import _api_post
+        from mcp_server.catalog_api import api_post as _api_post
 
         error_response = MagicMock(spec=httpx.Response)
         error_response.status_code = 500
@@ -717,7 +717,7 @@ class TestApiPost:
     @pytest.mark.asyncio
     async def test_api_post_network_error_returns_error_dict(self, app_ctx):
         """Network error from POST returns error dict."""
-        from mcp_server.server import _api_post
+        from mcp_server.catalog_api import api_post as _api_post
 
         app_ctx.client.post = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
 
