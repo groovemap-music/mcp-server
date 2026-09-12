@@ -6,23 +6,31 @@ default:
 setup:
     uv sync --dev --frozen
 
-source-check:
-    uvx --from ruff==0.16.4 ruff format --check .
-    uvx --from ruff==0.16.4 ruff check .
-    python scripts/check-docs.py
-    python scripts/check-contracts.py
+source-check: format-check lint docs-check contract-check
 
-security:
+format-check:
+    uv run ruff format --check .
+
+lint:
+    uv run ruff check .
+
+docs-check:
+    uv run python scripts/check-docs.py
+
+contract-check:
+    uv run python scripts/check-contracts.py
+
+secret-scan:
     gitleaks git --redact --no-banner
     gitleaks dir . --redact --no-banner
 
 automation-check:
     actionlint .github/workflows/*.yml
-    python scripts/check-automation.py
+    uv run python scripts/check-automation.py
 
 ci-check: source-check typecheck protocol-check automation-check bump-preview
 
-check: ci-check security test build install-check license-check
+check: ci-check secret-scan coverage build install-check license-check
 
 format:
     uv run ruff format .
@@ -34,8 +42,7 @@ typecheck:
 test:
     uv run pytest --cov=mcp_server --cov-report=term-missing --cov-report=xml
 
-coverage:
-    uv run pytest --cov=mcp_server --cov-report=term-missing --cov-report=xml
+coverage: test
 
 protocol-check:
     uv run pytest tests/test_mcp_tools_regression.py tests/test_contract.py
