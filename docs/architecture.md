@@ -6,21 +6,21 @@ access.
 
 ```mermaid
 flowchart LR
-    Client["MCP client"] -->|"stdio or Streamable HTTP"| Root["server composition"]
-    Root --> Registry["tool registration"]
-    Registry --> Routing["argument policy and routing"]
+    Client["MCP client"] -->|"stdio or Streamable HTTP"| Transport["transport dispatch"]
+    Transport --> Root["server composition and lifespan"]
+    Root --> Registry["tool registration and telemetry"]
+    Registry --> Routing["argument policy and route choice"]
     Routing -->|"HTTP GET/POST"| Adapter["Catalog API adapter"]
-    Adapter --> API["catalog-api"]
-    Routing -. "shared find-path semantics" .-> Tools["groovemap-agent-tools"]
-    API --> Neo4j[(Neo4j)]
-    API --> Postgres[(PostgreSQL)]
+    Adapter --> API["catalog-api boundary"]
+    Adapter -. "checked by just contract-check" .-> Contract["promoted routes v1"]
+    Routing -. "installed package" .-> Tools["groovemap-agent-tools"]
 ```
 
 ## Request path
 
 1. An MCP client invokes one of the server's twelve tools.
-2. The server validates MCP arguments and converts the call to a promoted Catalog API v1
-   route.
+2. The MCP SDK validates the generated input schema, then `tool_routing` applies the
+   adapter's value policy and selects a promoted Catalog API v1 route.
 3. The promoted v1 routes used by this adapter are public, no-token Catalog API routes.
    `catalog-api` applies route validation, rate limiting, query semantics, and persistence
    policy.
@@ -28,8 +28,12 @@ flowchart LR
    upstream failures are returned as structured error objects.
 
 The promoted contract under [`contracts/catalog-api/mcp-server/v1`](../contracts/catalog-api/mcp-server/v1)
-is the compatibility boundary. `just protocol-check` verifies the exported MCP surface,
-route set, and producer provenance.
+is the compatibility boundary. [`routes.json`](../contracts/catalog-api/mcp-server/v1/routes.json)
+is version 1 and records the eight GET/POST operations used by the twelve tools.
+[`source.json`](../contracts/catalog-api/mcp-server/v1/source.json) pins the `catalog-api`
+producer repository and commit plus the routes digest. `just contract-check` verifies the
+digest, version, and every literal adapter route; `just protocol-check` also verifies the
+exported MCP names and input schemas.
 
 ## Ownership
 
@@ -43,7 +47,7 @@ route set, and producer provenance.
 - `mcp_server.tool_routing` owns tool descriptions, argument validation, and route choice.
 - `mcp_server.catalog_api` owns Catalog API request/response adaptation and HTTP error
   mapping.
-- `mcp_server.telemetry` owns tool metrics and root spans. Runtime telemetry setup, HTTP
+- `mcp_server.telemetry` owns adapter tool metrics and handler spans. Runtime telemetry setup, HTTP
   instrumentation, and shutdown remain at the composition root.
 - [`python-libraries`](https://github.com/groovemap-music/python-libraries/tree/main/agent-tools)
   owns framework-neutral `groovemap-agent-tools` behavior shared with other consumers.
@@ -52,6 +56,10 @@ route set, and producer provenance.
   MCP v1 routes do not currently implement token authentication.
 - [`deployment`](https://github.com/groovemap-music/deployment) owns hosted topology,
   ingress authentication, credentials, network policy, and image rollout.
+
+`catalog-api` internals and database implementation deliberately stop at the boundary node
+in the diagram. This repository consumes published HTTP routes and installed packages; it
+does not import another repository's source tree or require a sibling checkout at runtime.
 
 See the [tool reference](tools.md), [transport and security boundaries](security.md), and
 [documentation index](README.md).
