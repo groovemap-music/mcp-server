@@ -10,12 +10,19 @@ local-development and desktop-client boundary.
 
 ## Streamable HTTP
 
-`groovemap-mcp --transport streamable-http` starts the SDK's Streamable HTTP transport.
-This repository does not configure ingress authentication, TLS termination, or network
-policy. Do not expose that listener directly to an untrusted network.
+`groovemap-mcp --transport streamable-http` starts the pinned SDK's stateful Streamable HTTP
+transport at `http://127.0.0.1:8000/mcp`. The adapter passes no bind options and exposes no
+host, port, or path environment variables. The image declares port 8000 and selects this
+transport by default, but the SDK's loopback bind means the image alone is not a remotely
+reachable hosted endpoint.
 
-An approved hosted deployment must provide those controls and is owned by the
-[`deployment`](https://github.com/groovemap-music/deployment) repository.
+This repository does not configure ingress authentication, TLS termination, or network
+policy. Do not expose the listener directly to an untrusted network.
+
+An approved hosted deployment must provide those controls and a reviewed non-loopback serving
+arrangement. That design is owned by the
+[`deployment`](https://github.com/groovemap-music/deployment) repository; changing this
+adapter's bind contract requires an explicit runtime change.
 
 ## Catalog API authentication boundary
 
