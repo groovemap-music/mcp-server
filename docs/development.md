@@ -24,8 +24,10 @@ normal Git credential helper; CI uses a short-lived, read-only GitHub App token.
 a cross-repository personal access token.
 
 New tool behavior belongs in `python-libraries/agent-tools` when it is framework-neutral.
-Keep only MCP transport and registration code here. Promote contract changes through the
-producer repository and update the committed digest before changing adapters.
+Keep runtime construction in `server`, CLI dispatch in `transport`, registration in
+`registration`, local argument/route policy in `tool_routing`, and HTTP adaptation in
+`catalog_api`. Promote contract changes through the producer repository and update the
+committed digest before changing adapters.
 
 See the [architecture](architecture.md), [tool reference](tools.md),
 [configuration](configuration.md), [transports and security](security.md), and

@@ -6,10 +6,12 @@ access.
 
 ```mermaid
 flowchart LR
-    Client["MCP client"] -->|"stdio or Streamable HTTP"| Server["mcp-server"]
-    Server --> Registry["MCP tool registry"]
-    Registry -->|"HTTP GET/POST"| API["catalog-api"]
-    Registry -. "shared find-path semantics" .-> Tools["groovemap-agent-tools"]
+    Client["MCP client"] -->|"stdio or Streamable HTTP"| Root["server composition"]
+    Root --> Registry["tool registration"]
+    Registry --> Routing["argument policy and routing"]
+    Routing -->|"HTTP GET/POST"| Adapter["Catalog API adapter"]
+    Adapter --> API["catalog-api"]
+    Routing -. "shared find-path semantics" .-> Tools["groovemap-agent-tools"]
     API --> Neo4j[(Neo4j)]
     API --> Postgres[(PostgreSQL)]
 ```
@@ -31,8 +33,18 @@ route set, and producer provenance.
 
 ## Ownership
 
-- `mcp-server` owns MCP transport selection, tool registration, argument validation,
-  Catalog API request adaptation, and protocol-level errors.
+- `mcp_server.server` is the composition root. It brackets the telemetry lifecycle,
+  constructs the instrumented HTTP client, creates `MCPServer`, and
+  re-exports the established public entry points.
+- `mcp_server.transport` parses the supported CLI flags and dispatches the selected MCP
+  SDK transport, preserving `stdio` as the fallback.
+- `mcp_server.registration` binds the stable ordered handler set to MCP and applies
+  tool-level instrumentation.
+- `mcp_server.tool_routing` owns tool descriptions, argument validation, and route choice.
+- `mcp_server.catalog_api` owns Catalog API request/response adaptation and HTTP error
+  mapping.
+- `mcp_server.telemetry` owns tool metrics and root spans. Runtime telemetry setup, HTTP
+  instrumentation, and shutdown remain at the composition root.
 - [`python-libraries`](https://github.com/groovemap-music/python-libraries/tree/main/agent-tools)
   owns framework-neutral `groovemap-agent-tools` behavior shared with other consumers.
 - [`catalog-api`](https://github.com/groovemap-music/catalog-api) owns HTTP route policy,

@@ -35,6 +35,14 @@ def test_promoted_contract_has_verified_provenance() -> None:
     assert hashlib.sha256(contract_path.read_bytes()).hexdigest() == source["contract_sha256"]
 
 
+def test_contract_checker_reads_the_adapter_owners() -> None:
+    checker = (ROOT / "scripts/check-contracts.py").read_text()
+
+    assert '"mcp_server/catalog_api.py"' in checker
+    assert '"mcp_server/tool_routing.py"' in checker
+    assert '"mcp_server/server.py"' not in checker
+
+
 def test_public_mcp_tool_surface_is_stable() -> None:
     expected = {
         "find_path",
