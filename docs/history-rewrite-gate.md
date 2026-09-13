@@ -1,4 +1,9 @@
-# History rewrite approval gate
+# Historical publication record
+
+> Historical context: this procedure records the one-time sanitization gate used before the
+> repository became public. It is not a current release or deployment step, and the already
+> sanitized public checkout is not a valid source for rerunning it because the expected private
+> objects are intentionally absent.
 
 This procedure prepares evidence; it does not authorize a rewrite. It operates in independent
 backup and sanitized clones. The working repository and its remotes are never rewritten in place.
@@ -29,7 +34,8 @@ flowchart TD
     Cutover --> Verify[Fresh-clone verification]
 ```
 
-Run the checked-in rehearsal with absolute paths:
+To reproduce the historical evidence from an authorized pre-cutover source clone, run the
+checked-in rehearsal with absolute paths:
 
 ```bash
 export PLANNING_ARCHIVE_REPO=/absolute/path/to/planning-archive
@@ -43,9 +49,9 @@ bundle, backup and sanitized mirrors, before-and-after ref inventories, commit a
 removed-object-to-archive map, full object-graph and secret-scan evidence, and a fresh sanitized
 checkout validation log. Evidence permissions are restricted to the current user.
 
-## Separate cutover approval
+## Historical cutover boundary
 
-No push follows automatically. The operator must explicitly approve the reviewed map, exact
-private remote, expected force-with-lease values, maintenance window, rollback owner, and backup
-retention. Any remote drift invalidates the evidence and requires a new rehearsal. Repository
-visibility remains unchanged, and no tag, release, package, or image is created or deleted.
+The rehearsal never pushed. The original cutover required separate operator approval of the
+reviewed map, private remote, expected force-with-lease values, maintenance window, rollback
+owner, and backup retention. The retained script still changes no remote or repository setting
+and creates or deletes no tag, release, package, or image.

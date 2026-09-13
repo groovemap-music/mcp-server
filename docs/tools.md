@@ -1,27 +1,32 @@
 # MCP tool reference
 
-The server exports exactly twelve tools. All data operations use the promoted Catalog API
-v1 route contract in [`contracts/catalog-api/mcp-server/v1`](../contracts/catalog-api/mcp-server/v1).
+The server exports exactly twelve tools. The MCP SDK derives the input schemas from the typed
+handlers in `mcp_server.tool_routing`; injected `ctx` is never exposed as an input. All data
+operations use the promoted Catalog API v1 [route contract](../contracts/catalog-api/mcp-server/v1/routes.json),
+whose [provenance record](../contracts/catalog-api/mcp-server/v1/source.json) pins the producer
+revision and digest.
 
-| MCP tool | Important inputs | Catalog API operation |
-| --- | --- | --- |
-| `search` | `query`, comma-separated `types`, `media`, `limit` | `GET /api/search` |
-| `get_artist_details` | numeric `artist_id` | `GET /api/node/{id}?type=artist` |
-| `get_label_details` | numeric `label_id` | `GET /api/node/{id}?type=label` |
-| `get_release_details` | numeric `release_id` | `GET /api/node/{id}?type=release` |
-| `get_genre_details` | exact `genre_name` | `GET /api/node/{name}?type=genre` |
-| `get_style_details` | exact `style_name` | `GET /api/node/{name}?type=style` |
-| `find_path` | entity names/types, `max_depth` | `GET /api/path` |
-| `get_trends` | entity name/type | `GET /api/trends` |
-| `get_graph_stats` | none | `GET /api/graph/stats` |
-| `get_collaborators` | numeric `artist_id`, `limit` | `GET /api/collaborators/{artist_id}` |
-| `get_genre_tree` | none | `GET /api/genre-tree` |
-| `nlq_query` | natural-language `query` | `POST /api/nlq/query` |
+| MCP tool | Required schema fields | Optional schema fields and defaults | Catalog API operation |
+| --- | --- | --- | --- |
+| `search` | `query: string` | `types: string = "artist,label,master,release"`; `media: list[string] \| null = null`; `limit: integer = 20` | `GET /api/search` |
+| `get_artist_details` | `artist_id: string` | none | `GET /api/node/{node_id}?type=artist` |
+| `get_label_details` | `label_id: string` | none | `GET /api/node/{node_id}?type=label` |
+| `get_release_details` | `release_id: string` | none | `GET /api/node/{node_id}?type=release` |
+| `get_genre_details` | `genre_name: string` | none | `GET /api/node/{node_id}?type=genre` |
+| `get_style_details` | `style_name: string` | none | `GET /api/node/{node_id}?type=style` |
+| `find_path` | `from_name: string`; `from_type: string`; `to_name: string`; `to_type: string` | `max_depth: integer = 10` | `GET /api/path` |
+| `get_trends` | `name: string` | `entity_type: string = "artist"` | `GET /api/trends` |
+| `get_graph_stats` | none | none | `GET /api/graph/stats` |
+| `get_collaborators` | `artist_id: string` | `limit: integer = 20` | `GET /api/collaborators/{artist_id}` |
+| `get_genre_tree` | none | none | `GET /api/genre-tree` |
+| `nlq_query` | `query: string` | none | `POST /api/nlq/query` |
 
 ## Validation behavior
 
-- Search types are limited to `artist`, `label`, `master`, and `release`; result limits are
-  clamped to 1–100.
+- Search types are limited to `artist`, `label`, `master`, and `release`; an empty `types`
+  string selects all four. Result limits are clamped to 1–100. The producer rejects search
+  queries shorter than three characters; that constraint is not encoded in the MCP input
+  schema.
 - `search`'s optional `media` filter takes a list of family or medium ids from the ADR 0007
   canonical media taxonomy (see [Media filter and block](#media-filter-and-block)). An id the
   taxonomy does not define returns an error naming the unknown ids and the valid families,
@@ -35,9 +40,9 @@ v1 route contract in [`contracts/catalog-api/mcp-server/v1`](../contracts/catalo
 
 ## Media filter and block
 
-Both `search` and `get_release_details` speak the ADR 0007 canonical media taxonomy that the
-`groovemap-agent-tools` and `groovemap-runtime` libraries vendor (`common.media`,
-`common.agent_tools.discovery`).
+Both `search` and `get_release_details` speak the ADR 0007 canonical media taxonomy.
+`common.agent_tools.discovery` is supplied by the installed `groovemap-agent-tools` package;
+`common.media` is supplied by the installed `groovemap-runtime` package.
 
 - **`search`'s `media` filter** takes any mix of family ids (`vinyl`, `shellac`,
   `grooved_other`, `tape`, `optical`, `digital`, `video`, `other`) and narrower medium ids

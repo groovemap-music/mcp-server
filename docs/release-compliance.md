@@ -35,14 +35,14 @@ commit. CI runs for pushes to `main`, ordinary and Dependabot-authored pull requ
 dispatches, and weekly scheduled validation. Every pull request uses one required job graph;
 there is no actor-specific skip or reduced dependency-update path.
 
-Complete validation requires read access to the pinned `python-libraries` revision.
-`GROOVEMAP_CI_APP_CLIENT_ID` and `GROOVEMAP_CI_APP_PRIVATE_KEY` supply that read-only checkout.
-`CODECOV_TOKEN` is mapped explicitly and uploads fail closed. Infrastructure provides the same
-credential names to ordinary Actions and Dependabot.
+Complete validation fetches the public `python-libraries` repository at the immutable revision
+recorded in `pyproject.toml`. Neither workflow accepts a first-party repository credential or
+inherits secrets. CI maps only `CODECOV_TOKEN` explicitly, and uploads fail closed. Repository
+policy rejects the retired GitHub App credential markers and mutable workflow references.
 
-## Historical planning privacy
+## Historical publication note
 
-Raw migration plans are preserved in private `planning-archive` and removed from both the current
-public tree and every reachable historical object. The filtered clone is the only permissible
-rewrite target. Replacing the private remote from that clone and making the repository public are
-separate operator-approved actions; neither is performed by repository validation.
+Before this repository became public, raw migration plans were preserved in private
+`planning-archive` and removed from both the published tree and its reachable object graph. The
+retained [historical publication record](history-rewrite-gate.md) describes that completed
+boundary. No validation or release recipe rewrites history or changes repository visibility.

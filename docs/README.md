@@ -9,7 +9,7 @@ boundaries:
 - [Transports and security](security.md)
 - [Development](development.md)
 - [Release compliance](release-compliance.md)
-- [History rewrite approval gate](history-rewrite-gate.md)
+- [Historical publication record](history-rewrite-gate.md)
 
 Organization-wide conventions live in the public `.github` repository, including the
 [GrooveMap logging emoji convention](https://github.com/groovemap-music/.github/blob/main/docs/emoji-guide.md).

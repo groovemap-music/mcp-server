@@ -44,12 +44,17 @@ API_BASE_URL=http://localhost:8004 uv run groovemap-mcp
 ```
 
 The default transport is `stdio`, which is appropriate when an MCP client launches the
-server as a subprocess. An explicitly designed hosted deployment can select Streamable
-HTTP:
+server as a subprocess. Streamable HTTP can be selected explicitly for a local integration
+test:
 
 ```bash
 API_BASE_URL=http://localhost:8004 uv run groovemap-mcp --transport streamable-http
 ```
+
+With no transport kwargs exposed by this adapter, the pinned MCP SDK binds Streamable HTTP
+to `127.0.0.1:8000` at `/mcp`. This repository does not provide a public bind-address or
+ingress configuration; see [transport and security boundaries](docs/security.md) before
+designing a hosted deployment.
 
 Example local client configuration:
 
@@ -92,11 +97,12 @@ The server pushes OpenTelemetry metrics and traces over OTLP/HTTP when
 behaves exactly as it does today. Neither signal can fail startup or a tool call, and the exit
 path force-flushes both providers so even a short stdio session exports what it recorded.
 
-Every tool call is recorded as `groovemap.mcp.tool.calls` and `groovemap.mcp.tool.duration`
-`{tool, outcome}`, and runs inside an `mcp.tool {tool}` root span carrying the same two
-attributes. Catalog API requests are instrumented via `instrument_httpx`, so each one is a
-child of that span and carries `traceparent` into `catalog-api` — a single trace covers the
-agent's tool call and the API work behind it.
+Every tool call increments `groovemap.mcp.tool.calls` with `{tool, outcome}` and records
+`groovemap.mcp.tool.duration` with `{tool}`. The adapter handler runs inside an
+`mcp.tool {tool}` span with `{tool, outcome}`; on a real MCP request that span is a child of
+the SDK's `tools/call {tool}` server span. Catalog API requests are instrumented via
+`instrument_httpx`, so each request is a child of the adapter span and carries
+`traceparent` into `catalog-api`.
 
 The process view (`process.cpu.time`, `process.memory.usage`, `process.thread.count`,
 `process.open_file_descriptor.count`, `process.context_switches`, and the CPython
@@ -118,11 +124,15 @@ just check
 The stable repository interface is:
 
 - `just setup` — install the locked environment.
-- `just check` — run formatting, typing, tests, protocol/contract checks, builds, license
-  checks, and a Commitizen preview.
+- `just check` — run the complete local pre-merge gate.
 - `just test` — run the MCP adapter suite with coverage.
+- `just coverage` — run the same coverage recipe used by CI.
 - `just protocol-check` — verify the exported MCP tool surface and Catalog API
   compatibility.
+- `just docs-check` — validate public documentation links, required content, and diagram
+  fences.
+- `just automation-check` — validate workflows and their recipe contract.
+- `just secret-scan` — scan Git history and the working tree with Gitleaks.
 - `just build` — build the wheel and source distribution.
 - `just image` — build and inspect the local `mcp-server:local` Streamable HTTP image.
 - `just release-dry-run` — generate checksums, SBOM, notices, and provenance without
@@ -147,7 +157,7 @@ promotion workflow.
 - [Transports and security](docs/security.md)
 - [Development](docs/development.md)
 - [Release compliance](docs/release-compliance.md)
-- [History rewrite approval gate](docs/history-rewrite-gate.md)
+- [Historical publication record](docs/history-rewrite-gate.md)
 - [GrooveMap logging emoji convention](https://github.com/groovemap-music/.github/blob/main/docs/emoji-guide.md)
 
 Hosted topology, credentials, network policy, and image rollout belong to the
