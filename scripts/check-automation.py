@@ -21,6 +21,7 @@ ci = (workflow_directory / "ci.yml").read_text(encoding="utf-8")
 release = (workflow_directory / "release.yml").read_text(encoding="utf-8")
 dependabot = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
 dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+justfile = (ROOT / "Justfile").read_text(encoding="utf-8")
 
 require(
     ci,
@@ -34,13 +35,33 @@ require(
     "coverage-command: just coverage",
     "audit-command: just audit",
     "license-command: just license-check",
-    "secret-scan-command: just security",
+    "secret-scan-command: just secret-scan",
     "package-command: just build",
     "install-command: just install-check",
     "image-command: just image",
     "upload-codecov: true",
     "CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}",
 )
+
+require(
+    justfile,
+    "source-check: format-check lint docs-check contract-check",
+    "uv run ruff format --check .",
+    "uv run ruff check .",
+    "uv run python scripts/check-docs.py",
+    "uv run python scripts/check-contracts.py",
+    "uv run python scripts/check-automation.py",
+    "secret-scan:\n",
+    "coverage: test",
+    "check: ci-check secret-scan coverage build install-check license-check",
+    "audit:\n",
+    "image: prepare-image",
+    "install-check: build",
+    "license-check:\n",
+    "release-dry-run: check prepare-image",
+)
+assert "uvx --from ruff" not in justfile
+assert "\nsecurity:\n" not in justfile
 
 require(
     release,
