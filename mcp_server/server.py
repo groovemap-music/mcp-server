@@ -21,6 +21,7 @@ __all__ = [
     "find_path",
     "get_artist_details",
     "get_collaborators",
+    "get_consent",
     "get_genre_details",
     "get_genre_tree",
     "get_graph_stats",
@@ -31,7 +32,9 @@ __all__ = [
     "main",
     "mcp",
     "nlq_query",
+    "record_recommendation_outcome",
     "search",
+    "set_consent",
 ]
 
 logger = structlog.get_logger(__name__)
@@ -64,7 +67,10 @@ mcp = MCPServer(
         "'get_*_details' for deep info, 'find_path' for connections, "
         "'get_trends' for timelines, 'get_graph_stats' for an overview, "
         "'get_collaborators' for artist collaboration networks, and "
-        "'get_genre_tree' for the full genre/style hierarchy."
+        "'get_genre_tree' for the full genre/style hierarchy. When the deployment "
+        "configures delegation, 'record_recommendation_outcome' reports what the "
+        "collector did with a recommendation, and 'get_consent' and 'set_consent' "
+        "read and change their consent decisions."
     ),
 )
 
@@ -81,6 +87,9 @@ mcp = MCPServer(
     get_collaborators,
     get_genre_tree,
     nlq_query,
+    record_recommendation_outcome,
+    get_consent,
+    set_consent,
 ) = register_tools(mcp)
 
 

@@ -101,6 +101,11 @@ async def api_post(app: AppContext, path: str, json_data: dict[str, Any] | None 
     return await _call(app, path, app.client.post, json=json_data)
 
 
+async def api_put(app: AppContext, path: str, json_data: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Call a promoted Catalog API PUT route and preserve its JSON/error mapping."""
+    return await _call(app, path, app.client.put, json=json_data)
+
+
 async def find_path(app: AppContext, **kwargs: Any) -> dict[str, Any]:
     """Run the shared path policy with Catalog API-backed resolvers."""
     import common.agent_tools as agent_tools  # noqa: PLC0415

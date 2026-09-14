@@ -48,6 +48,7 @@ def test_public_mcp_tool_surface_is_stable() -> None:
         "find_path",
         "get_artist_details",
         "get_collaborators",
+        "get_consent",
         "get_genre_details",
         "get_genre_tree",
         "get_graph_stats",
@@ -56,7 +57,9 @@ def test_public_mcp_tool_surface_is_stable() -> None:
         "get_style_details",
         "get_trends",
         "nlq_query",
+        "record_recommendation_outcome",
         "search",
+        "set_consent",
     }
 
     tools = asyncio.run(mcp.list_tools())

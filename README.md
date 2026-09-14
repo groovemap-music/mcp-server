@@ -1,6 +1,6 @@
 # GrooveMap MCP server
 
-`mcp-server` presents the GrooveMap music catalog as twelve
+`mcp-server` presents the GrooveMap music catalog as fifteen
 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) tools. It translates MCP
 tool calls into HTTP requests to the separately deployed
 [`catalog-api`](https://github.com/groovemap-music/catalog-api); it never connects directly
@@ -30,6 +30,18 @@ This repository is licensed under the [MIT License](LICENSE).
 | `get_collaborators` | Read an artist collaboration network |
 | `get_genre_tree` | Read the genre/style hierarchy |
 | `nlq_query` | Ask a natural-language graph question |
+
+The last three act for the collector rather than reading the catalog, so they require a
+delegated app token and decline without one:
+
+| Delegated tool | Purpose |
+| --- | --- |
+| `record_recommendation_outcome` | Report what the collector did with a recommendation |
+| `get_consent` | Read the collector's current consent decisions |
+| `set_consent` | Grant or revoke consent for one purpose |
+
+Erasure and export are not tools. They are session-only rights the collector exercises for
+themselves; see [transports and security](docs/security.md).
 
 The [tool reference](docs/tools.md) documents inputs, Catalog API routes, and validation.
 

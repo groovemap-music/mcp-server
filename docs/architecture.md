@@ -18,7 +18,7 @@ flowchart LR
 
 ## Request path
 
-1. An MCP client invokes one of the server's twelve tools.
+1. An MCP client invokes one of the server's fifteen tools.
 2. The MCP SDK validates the generated input schema, then `tool_routing` applies the
    adapter's value policy and selects a promoted Catalog API v1 route.
 3. The catalog routes are public, no-token Catalog API routes; the three delegated tools
@@ -30,7 +30,9 @@ flowchart LR
 
 The promoted contract under [`contracts/catalog-api/mcp-server/v1`](../contracts/catalog-api/mcp-server/v1)
 is the compatibility boundary. [`routes.json`](../contracts/catalog-api/mcp-server/v1/routes.json)
-is version 1 and records the eight GET/POST operations used by the twelve tools.
+is version 1 and records every operation `catalog-api` publishes for this consumer,
+including the erasure and export routes no tool exposes; eleven of them back the fifteen
+tools.
 [`source.json`](../contracts/catalog-api/mcp-server/v1/source.json) pins the `catalog-api`
 producer repository and commit plus the routes digest. `just contract-check` verifies the
 digest, version, and every literal adapter route; `just protocol-check` also verifies the

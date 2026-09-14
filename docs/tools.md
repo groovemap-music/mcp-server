@@ -1,10 +1,14 @@
 # MCP tool reference
 
-The server exports exactly twelve tools. The MCP SDK derives the input schemas from the typed
-handlers in `mcp_server.tool_routing`; injected `ctx` is never exposed as an input. All data
-operations use the promoted Catalog API v1 [route contract](../contracts/catalog-api/mcp-server/v1/routes.json),
-whose [provenance record](../contracts/catalog-api/mcp-server/v1/source.json) pins the producer
+The server exports exactly fifteen tools: twelve that read the catalog and three that act for
+the collector. The MCP SDK derives the input schemas from the typed handlers in
+`mcp_server.tool_routing`; injected `ctx` is never exposed as an input, and neither is the
+delegated app token. All data operations use the promoted Catalog API v1
+[route contract](../contracts/catalog-api/mcp-server/v1/routes.json), whose
+[provenance record](../contracts/catalog-api/mcp-server/v1/source.json) pins the producer
 revision and digest.
+
+## Catalog tools
 
 | MCP tool | Required schema fields | Optional schema fields and defaults | Catalog API operation |
 | --- | --- | --- | --- |
@@ -21,6 +25,31 @@ revision and digest.
 | `get_genre_tree` | none | none | `GET /api/genre-tree` |
 | `nlq_query` | `query: string` | none | `POST /api/nlq/query` |
 
+## Delegated tools
+
+These three act for the collector, so each one carries the delegated app token described in
+[transports and security](security.md#catalog-api-authentication-boundary). With
+`GROOVEMAP_CATALOG_APP_TOKEN` unset they return `{"error": "delegation not configured", ...}`
+without making a request, so an unconfigured deployment never reaches the API with an
+unauthenticated write.
+
+| MCP tool | Required schema fields | Optional schema fields and defaults | Catalog API operation |
+| --- | --- | --- | --- |
+| `record_recommendation_outcome` | `impression_id: string`; `item_id: string`; `outcome: string` | none | `POST /api/activity/events` |
+| `get_consent` | none | none | `GET /api/user/consent` |
+| `set_consent` | `purpose: string`; `granted: boolean` | none | `PUT /api/user/consent/{purpose}` |
+
+- `record_recommendation_outcome` sends `event_type` as `recommendation.<outcome>` alongside
+  the `impression_id` and `item_id` it was given. The published vocabulary also carries
+  `recommendation.shown`, which is the impression itself rather than an outcome, so `shown`
+  is not an accepted value here.
+- `get_consent` returns every purpose in the vocabulary, including one nobody has acted on,
+  which is reported as not granted rather than omitted.
+- `set_consent` is idempotent in both directions; the response's `changed` field says whether
+  this call was the one that moved the decision.
+- Erasure and export have promoted routes but no tool. They are session-only rights, and a
+  delegated credential must not be able to exercise either.
+
 ## Validation behavior
 
 - Search types are limited to `artist`, `label`, `master`, and `release`; an empty `types`
@@ -34,7 +63,13 @@ revision and digest.
 - Path and trend entity types are limited to `artist`, `genre`, `label`, and `style`; path
   depth is clamped to 1–10.
 - Artist, label, and release identifiers must be numeric strings.
-- Genre and style names are URL-encoded before they become route segments.
+- Genre and style names are URL-encoded before they become route segments, as is
+  `set_consent`'s `purpose`.
+- `record_recommendation_outcome`'s `outcome` is matched case-insensitively against `opened`,
+  `saved`, `dismissed`, and `hidden`, and `set_consent`'s `purpose` against the published
+  consent vocabulary (`product_analytics` and `model_training`). Both are checked before the
+  delegation check and before any request, so a value outside the vocabulary is an MCP error
+  here rather than a 422 from the producer.
 - Catalog API HTTP and transport failures become structured MCP error results instead of
   direct database errors.
 

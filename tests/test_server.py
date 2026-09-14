@@ -4,6 +4,7 @@ All tools call the GrooveMap Catalog API via httpx instead of
 accessing databases directly. Tests mock httpx responses.
 """
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -742,6 +743,212 @@ class TestApiPost:
 
         assert "error" in result
         assert "Connection refused" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# Delegated tools: record_recommendation_outcome, get_consent, set_consent
+# ---------------------------------------------------------------------------
+
+
+class TestRecordRecommendationOutcome:
+    @pytest.mark.asyncio
+    async def test_posts_the_prefixed_event_type_with_both_ids(self, delegated_context, delegated_ctx):
+        from mcp_server.server import record_recommendation_outcome
+
+        accepted = {"recorded": True, "event_type": "recommendation.saved", "impression_id": "imp-1"}
+        delegated_ctx.client.post = AsyncMock(return_value=_mock_response(accepted))
+
+        result = await record_recommendation_outcome(
+            impression_id="imp-1",
+            item_id="item-9",
+            outcome="saved",
+            ctx=delegated_context,
+        )
+
+        assert result == accepted
+        assert delegated_ctx.client.post.call_args.args[0] == "http://test-api:8004/api/activity/events"
+        assert delegated_ctx.client.post.call_args.kwargs["json"] == {
+            "event_type": "recommendation.saved",
+            "impression_id": "imp-1",
+            "item_id": "item-9",
+        }
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("outcome", ["opened", "saved", "dismissed", "hidden"])
+    async def test_every_documented_outcome_is_accepted(self, delegated_context, delegated_ctx, outcome):
+        from mcp_server.server import record_recommendation_outcome
+
+        delegated_ctx.client.post = AsyncMock(return_value=_mock_response({"recorded": True}))
+
+        await record_recommendation_outcome(impression_id="i", item_id="x", outcome=outcome, ctx=delegated_context)
+
+        assert delegated_ctx.client.post.call_args.kwargs["json"]["event_type"] == f"recommendation.{outcome}"
+
+    @pytest.mark.asyncio
+    async def test_outcome_is_matched_case_insensitively(self, delegated_context, delegated_ctx):
+        from mcp_server.server import record_recommendation_outcome
+
+        delegated_ctx.client.post = AsyncMock(return_value=_mock_response({"recorded": True}))
+
+        await record_recommendation_outcome(impression_id="i", item_id="x", outcome="Opened", ctx=delegated_context)
+
+        assert delegated_ctx.client.post.call_args.kwargs["json"]["event_type"] == "recommendation.opened"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("outcome", ["shown", "clicked", "recommendation.opened", ""])
+    async def test_a_value_outside_the_four_outcomes_never_reaches_the_api(self, delegated_context, delegated_ctx, outcome):
+        """The producer answers a bad enum with a 422; it should never have to."""
+        from mcp_server.server import record_recommendation_outcome
+
+        delegated_ctx.client.post = AsyncMock()
+
+        result = await record_recommendation_outcome(impression_id="i", item_id="x", outcome=outcome, ctx=delegated_context)
+
+        assert "Invalid outcome" in result["error"]
+        delegated_ctx.client.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_declines_without_a_token_and_records_nothing(self, mock_context, app_ctx):
+        from mcp_server.catalog_api import DELEGATION_NOT_CONFIGURED
+        from mcp_server.server import record_recommendation_outcome
+
+        app_ctx.client.post = AsyncMock()
+
+        result = await record_recommendation_outcome(impression_id="i", item_id="x", outcome="opened", ctx=mock_context)
+
+        assert result["error"] == DELEGATION_NOT_CONFIGURED
+        app_ctx.client.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_an_upstream_failure_is_returned_as_a_structured_error(self, delegated_context, delegated_ctx):
+        from mcp_server.server import record_recommendation_outcome
+
+        delegated_ctx.client.post = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
+
+        result = await record_recommendation_outcome(impression_id="i", item_id="x", outcome="opened", ctx=delegated_context)
+
+        assert "Connection refused" in result["error"]
+
+
+class TestGetConsent:
+    @pytest.mark.asyncio
+    async def test_returns_the_api_response_verbatim(self, delegated_context, delegated_ctx):
+        from mcp_server.server import get_consent
+
+        state = {
+            "purposes": [
+                {"purpose": "product_analytics", "granted": True, "granted_at": "2026-01-01T00:00:00Z", "revoked_at": None},
+                {"purpose": "model_training", "granted": False, "granted_at": None, "revoked_at": None},
+            ]
+        }
+        delegated_ctx.client.get = AsyncMock(return_value=_mock_response(state))
+
+        result = await get_consent(ctx=delegated_context)
+
+        assert result == state
+        assert delegated_ctx.client.get.call_args.args[0] == "http://test-api:8004/api/user/consent"
+
+    @pytest.mark.asyncio
+    async def test_declines_without_a_token(self, mock_context, app_ctx):
+        from mcp_server.catalog_api import DELEGATION_NOT_CONFIGURED
+        from mcp_server.server import get_consent
+
+        app_ctx.client.get = AsyncMock()
+
+        result = await get_consent(ctx=mock_context)
+
+        assert result["error"] == DELEGATION_NOT_CONFIGURED
+        app_ctx.client.get.assert_not_called()
+
+
+class TestSetConsent:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("purpose", ["product_analytics", "model_training"])
+    @pytest.mark.parametrize("granted", [True, False])
+    async def test_puts_the_decision_on_the_purpose_route(self, delegated_context, delegated_ctx, purpose, granted):
+        from mcp_server.server import set_consent
+
+        delegated_ctx.client.put = AsyncMock(return_value=_mock_response({"purpose": purpose, "granted": granted, "changed": True}))
+
+        result = await set_consent(purpose=purpose, granted=granted, ctx=delegated_context)
+
+        assert result == {"purpose": purpose, "granted": granted, "changed": True}
+        assert delegated_ctx.client.put.call_args.args[0] == f"http://test-api:8004/api/user/consent/{purpose}"
+        assert delegated_ctx.client.put.call_args.kwargs["json"] == {"granted": granted}
+
+    @pytest.mark.asyncio
+    async def test_the_delegated_put_carries_the_bearer_token(self, delegated_context, delegated_ctx):
+        from mcp_server.server import set_consent
+
+        delegated_ctx.client.put = AsyncMock(return_value=_mock_response({"changed": False}))
+
+        await set_consent(purpose="model_training", granted=False, ctx=delegated_context)
+
+        assert delegated_ctx.client.put.call_args.kwargs["headers"] == {"Authorization": "Bearer app-token-value"}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("purpose", ["marketing", "PRODUCT_ANALYTICS", "../admin", ""])
+    async def test_a_purpose_outside_the_vocabulary_never_reaches_the_api(self, delegated_context, delegated_ctx, purpose):
+        from mcp_server.server import set_consent
+
+        delegated_ctx.client.put = AsyncMock()
+
+        result = await set_consent(purpose=purpose, granted=True, ctx=delegated_context)
+
+        assert "Invalid purpose" in result["error"]
+        delegated_ctx.client.put.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_declines_without_a_token_and_changes_nothing(self, mock_context, app_ctx):
+        from mcp_server.catalog_api import DELEGATION_NOT_CONFIGURED
+        from mcp_server.server import set_consent
+
+        app_ctx.client.put = AsyncMock()
+
+        result = await set_consent(purpose="product_analytics", granted=True, ctx=mock_context)
+
+        assert result["error"] == DELEGATION_NOT_CONFIGURED
+        app_ctx.client.put.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_the_argument_check_runs_before_the_delegation_check(self, mock_context, app_ctx):
+        """A bad enum is the tool's own answer whether or not delegation is configured."""
+        from mcp_server.server import set_consent
+
+        app_ctx.client.put = AsyncMock()
+
+        result = await set_consent(purpose="marketing", granted=True, ctx=mock_context)
+
+        assert "Invalid purpose" in result["error"]
+
+
+class TestDelegatedToolVocabulary:
+    def test_the_consent_purposes_come_from_the_published_vocabulary(self):
+        from common.events import consent_purposes
+
+        from mcp_server.tool_routing import _CONSENT_PURPOSES
+
+        assert consent_purposes() == _CONSENT_PURPOSES
+
+    def test_every_outcome_maps_to_a_published_event_type(self):
+        """`recommendation.<outcome>` must be a real event type, and `shown` is not an outcome."""
+        from common.events import event_types
+
+        from mcp_server.tool_routing import _RECOMMENDATION_OUTCOMES
+
+        published = set(event_types())
+        assert all(f"recommendation.{outcome}" in published for outcome in _RECOMMENDATION_OUTCOMES)
+        assert "shown" not in _RECOMMENDATION_OUTCOMES
+
+    def test_erasure_and_export_are_not_exposed_as_tools(self):
+        """The routes are promoted; the tools deliberately are not."""
+        from mcp_server.tool_routing import TOOL_HANDLERS
+
+        routing = (Path(__file__).resolve().parents[1] / "mcp_server/tool_routing.py").read_text()
+
+        assert "/api/user/erasure" not in routing
+        assert "/api/user/export" not in routing
+        assert not any("erasure" in handler.__name__ or "export" in handler.__name__ for handler in TOOL_HANDLERS)
 
 
 # ---------------------------------------------------------------------------
