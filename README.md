@@ -86,9 +86,11 @@ machine-specific paths. See [configuration](docs/configuration.md) and
 [transport and security boundaries](docs/security.md) before exposing the server beyond a
 local process boundary.
 
-The authentication boundary is outside this adapter: the current server sends no Catalog
-API credential and configures no hosted ingress protection. Keep both hops within a trusted
-boundary unless `deployment` supplies those controls.
+The authentication boundary is mostly outside this adapter. The catalog tools send no
+Catalog API credential and this repository configures no hosted ingress protection, so keep
+both hops within a trusted boundary unless `deployment` supplies those controls. The three
+delegated tools are the exception: they present the app token in
+`GROOVEMAP_CATALOG_APP_TOKEN` and decline when it is unset.
 
 ## Observability
 

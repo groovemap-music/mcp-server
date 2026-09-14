@@ -39,13 +39,20 @@ logger = structlog.get_logger(__name__)
 
 @asynccontextmanager
 async def app_lifespan(server: MCPServer) -> AsyncIterator[AppContext]:  # noqa: ARG001
-    """Create and instrument the concrete Catalog API client for one server run."""
+    """Create and instrument the concrete Catalog API client for one server run.
+
+    The delegated app token is read here and only here. Reading it once at startup is what
+    makes it a deployment setting rather than something an agent can supply: no tool takes
+    it as an argument, and a tool cannot reach the environment through the lifespan state.
+    Its presence is logged; its value never is.
+    """
     base_url = getenv("API_BASE_URL", "http://localhost:8004")
+    app_token = getenv("GROOVEMAP_CATALOG_APP_TOKEN") or None
     async with httpx.AsyncClient(timeout=30.0) as client:
         instrument_httpx(client)
         start_event_loop_monitor()
-        logger.info("🚀 MCP server ready", api_base_url=base_url)
-        yield AppContext(client=client, base_url=base_url)
+        logger.info("🚀 MCP server ready", api_base_url=base_url, delegation_configured=app_token is not None)
+        yield AppContext(client=client, base_url=base_url, app_token=app_token)
         logger.info("👋 MCP server shut down")
 
 

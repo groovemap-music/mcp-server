@@ -65,9 +65,22 @@ def test_public_mcp_tool_surface_is_stable() -> None:
     assert all("ctx" not in tool.input_schema.get("properties", {}) for tool in tools)
 
 
-def test_lifespan_context_has_no_credential_contract() -> None:
-    """The public Catalog API adapter does not claim or carry a token."""
-    assert [field.name for field in fields(AppContext)] == ["client", "base_url"]
+def test_lifespan_context_carries_only_an_environment_sourced_delegated_token() -> None:
+    """The adapter's one credential is an optional app token, and only startup can set it."""
+    assert [field.name for field in fields(AppContext)] == ["client", "base_url", "app_token"]
+
+    lifespan = (ROOT / "mcp_server/server.py").read_text(encoding="utf-8")
+    assert 'getenv("GROOVEMAP_CATALOG_APP_TOKEN")' in lifespan
+
+    # No tool may accept, name, or otherwise source the token: the routing layer reads it
+    # from the lifespan state that `app_lifespan` populated, and from nowhere else.
+    routing = (ROOT / "mcp_server/tool_routing.py").read_text(encoding="utf-8")
+    assert "GROOVEMAP_CATALOG_APP_TOKEN" not in routing
+    assert "getenv" not in routing
+    assert "app_token" not in routing
+
+    tools = asyncio.run(mcp.list_tools())
+    assert all("app_token" not in tool.input_schema.get("properties", {}) for tool in tools)
 
 
 def test_documented_launch_paths_use_the_project_environment() -> None:
@@ -85,9 +98,14 @@ def test_documented_launch_paths_use_the_project_environment() -> None:
 
 
 def test_documented_catalog_boundary_matches_promoted_contract() -> None:
-    """The adapter's current upstream boundary is explicitly public and tokenless."""
-    architecture = (ROOT / "docs/architecture.md").read_text(encoding="utf-8")
-    security = (ROOT / "docs/security.md").read_text(encoding="utf-8")
+    """Both documents state the same boundary: public routes, three delegated, none erasing."""
+    architecture = " ".join((ROOT / "docs/architecture.md").read_text(encoding="utf-8").split())
+    security = " ".join((ROOT / "docs/security.md").read_text(encoding="utf-8").split())
 
-    assert "public, no-token Catalog API routes" in " ".join(architecture.split())
-    assert "public, no-token Catalog API routes" in " ".join(security.split())
+    boundary = (
+        "The catalog routes are public, no-token Catalog API routes; the three delegated "
+        "tools carry a scoped app token supplied by configuration; erasure and export are "
+        "never exposed as tools."
+    )
+    assert boundary in architecture
+    assert boundary in security

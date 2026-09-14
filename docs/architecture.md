@@ -21,9 +21,10 @@ flowchart LR
 1. An MCP client invokes one of the server's twelve tools.
 2. The MCP SDK validates the generated input schema, then `tool_routing` applies the
    adapter's value policy and selects a promoted Catalog API v1 route.
-3. The promoted v1 routes used by this adapter are public, no-token Catalog API routes.
-   `catalog-api` applies route validation, rate limiting, query semantics, and persistence
-   policy.
+3. The catalog routes are public, no-token Catalog API routes; the three delegated tools
+   carry a scoped app token supplied by configuration; erasure and export are never
+   exposed as tools. `catalog-api` applies route validation, rate limiting, query
+   semantics, and persistence policy.
 4. The server returns the Catalog API JSON result as the MCP tool result. Transport and
    upstream failures are returned as structured error objects.
 
@@ -45,15 +46,16 @@ exported MCP names and input schemas.
 - `mcp_server.registration` binds the stable ordered handler set to MCP and applies
   tool-level instrumentation.
 - `mcp_server.tool_routing` owns tool descriptions, argument validation, and route choice.
-- `mcp_server.catalog_api` owns Catalog API request/response adaptation and HTTP error
-  mapping.
+- `mcp_server.catalog_api` owns Catalog API request/response adaptation, HTTP error
+  mapping, and the one place that decides whether a request carries the delegated app
+  token. The token reaches it from the lifespan state and never from a tool argument.
 - `mcp_server.telemetry` owns adapter tool metrics and handler spans. Runtime telemetry setup, HTTP
   instrumentation, and shutdown remain at the composition root.
 - [`python-libraries`](https://github.com/groovemap-music/python-libraries/tree/main/agent-tools)
   owns framework-neutral `groovemap-agent-tools` behavior shared with other consumers.
 - [`catalog-api`](https://github.com/groovemap-music/catalog-api) owns HTTP route policy,
-  including authentication and authorization where a route implements them. The promoted
-  MCP v1 routes do not currently implement token authentication.
+  including authentication and authorization where a route implements them. It decides what
+  the delegated app token is allowed to do; this adapter only presents it.
 - [`deployment`](https://github.com/groovemap-music/deployment) owns hosted topology,
   ingress authentication, credentials, network policy, and image rollout.
 

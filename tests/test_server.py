@@ -25,10 +25,27 @@ def app_ctx():
 
 
 @pytest.fixture()
+def delegated_ctx():
+    """Create an AppContext that has a delegated app token configured."""
+    from mcp_server.server import AppContext
+
+    client = MagicMock(spec=httpx.AsyncClient)
+    return AppContext(client=client, base_url="http://test-api:8004", app_token="app-token-value")
+
+
+@pytest.fixture()
 def mock_context(app_ctx):
     """Create a mock MCP Context whose lifespan_context is our AppContext."""
     ctx = MagicMock()
     ctx.request_context.lifespan_context = app_ctx
+    return ctx
+
+
+@pytest.fixture()
+def delegated_context(delegated_ctx):
+    """Create a mock MCP Context whose lifespan_context carries a delegated app token."""
+    ctx = MagicMock()
+    ctx.request_context.lifespan_context = delegated_ctx
     return ctx
 
 
@@ -725,6 +742,134 @@ class TestApiPost:
 
         assert "error" in result
         assert "Connection refused" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# Delegated app token boundary
+# ---------------------------------------------------------------------------
+
+
+class TestDelegatedTokenBoundary:
+    """Where the bearer header goes, where it does not, and what it never reaches."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("path", ["/api/search", "/api/graph/stats", "/api/node/12345", "/api/user/export"])
+    async def test_public_routes_send_no_authorization_header(self, delegated_ctx, path):
+        """A configured token changes nothing about a catalog route's request."""
+        from mcp_server.catalog_api import api_get
+
+        delegated_ctx.client.get = AsyncMock(return_value=_mock_response({"ok": True}))
+
+        await api_get(delegated_ctx, path)
+
+        assert "headers" not in delegated_ctx.client.get.call_args.kwargs
+
+    @pytest.mark.asyncio
+    async def test_delegated_get_route_carries_the_bearer_token(self, delegated_ctx):
+        from mcp_server.catalog_api import api_get
+
+        delegated_ctx.client.get = AsyncMock(return_value=_mock_response({"purposes": []}))
+
+        await api_get(delegated_ctx, "/api/user/consent")
+
+        assert delegated_ctx.client.get.call_args.kwargs["headers"] == {"Authorization": "Bearer app-token-value"}
+
+    @pytest.mark.asyncio
+    async def test_delegated_post_route_carries_the_bearer_token(self, delegated_ctx):
+        from mcp_server.catalog_api import api_post
+
+        delegated_ctx.client.post = AsyncMock(return_value=_mock_response({"recorded": True}))
+
+        await api_post(delegated_ctx, "/api/activity/events", json_data={"event_type": "recommendation.opened"})
+
+        assert delegated_ctx.client.post.call_args.kwargs["headers"] == {"Authorization": "Bearer app-token-value"}
+
+    @pytest.mark.asyncio
+    async def test_delegated_route_sends_nothing_when_no_token_is_configured(self, app_ctx):
+        """Without a token the request still goes out unauthenticated rather than half-signed."""
+        from mcp_server.catalog_api import api_get
+
+        app_ctx.client.get = AsyncMock(return_value=_mock_response({"purposes": []}))
+
+        await api_get(app_ctx, "/api/user/consent")
+
+        assert "headers" not in app_ctx.client.get.call_args.kwargs
+
+    @pytest.mark.asyncio
+    async def test_a_neighbouring_path_does_not_inherit_the_header(self, delegated_ctx):
+        """The delegated route set is matched whole, so no longer path picks the token up."""
+        from mcp_server.catalog_api import api_get
+
+        delegated_ctx.client.get = AsyncMock(return_value=_mock_response({"ok": True}))
+
+        await api_get(delegated_ctx, "/api/user/consent/product_analytics/history")
+
+        assert "headers" not in delegated_ctx.client.get.call_args.kwargs
+
+    def test_delegation_error_is_absent_when_a_token_is_configured(self, delegated_ctx):
+        from mcp_server.catalog_api import delegation_error
+
+        assert delegation_error(delegated_ctx) is None
+
+    def test_delegation_error_names_the_setting_and_never_a_value(self, app_ctx):
+        from mcp_server.catalog_api import DELEGATION_NOT_CONFIGURED, delegation_error
+
+        error = delegation_error(app_ctx)
+
+        assert error is not None
+        assert error["error"] == DELEGATION_NOT_CONFIGURED
+        assert "GROOVEMAP_CATALOG_APP_TOKEN" in error["detail"]
+
+    def test_delegation_error_is_a_fresh_mapping_per_call(self, app_ctx):
+        """A caller that annotates the refusal cannot change the next caller's refusal."""
+        from mcp_server.catalog_api import delegation_error
+
+        first = delegation_error(app_ctx)
+        assert first is not None
+        first["error"] = "mutated"
+
+        second = delegation_error(app_ctx)
+        assert second is not None
+        assert second["error"] != "mutated"
+
+    @pytest.mark.asyncio
+    async def test_an_upstream_failure_never_reports_the_token(self, delegated_ctx):
+        """The error mapping returns the URL and the status, and nothing about the credential."""
+        from mcp_server.catalog_api import api_get
+
+        delegated_ctx.client.get = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
+
+        result = await api_get(delegated_ctx, "/api/user/consent")
+
+        assert "app-token-value" not in repr(result)
+        assert "Authorization" not in repr(result)
+
+
+class TestLifespanTokenSource:
+    @pytest.mark.asyncio
+    async def test_lifespan_reads_the_token_from_the_environment(self, monkeypatch):
+        from mcp_server.server import app_lifespan
+
+        monkeypatch.setenv("GROOVEMAP_CATALOG_APP_TOKEN", "from-the-environment")
+        async with app_lifespan(MagicMock()) as app:
+            assert app.app_token == "from-the-environment"
+
+    @pytest.mark.asyncio
+    async def test_lifespan_leaves_the_token_unset_when_the_variable_is_absent(self, monkeypatch):
+        from mcp_server.server import app_lifespan
+
+        monkeypatch.delenv("GROOVEMAP_CATALOG_APP_TOKEN", raising=False)
+        async with app_lifespan(MagicMock()) as app:
+            assert app.app_token is None
+
+    @pytest.mark.asyncio
+    async def test_an_empty_variable_is_not_a_token(self, monkeypatch):
+        """An exported-but-empty variable is a deployment that did not configure delegation."""
+        from mcp_server.server import app_lifespan
+
+        monkeypatch.setenv("GROOVEMAP_CATALOG_APP_TOKEN", "")
+        async with app_lifespan(MagicMock()) as app:
+            assert app.app_token is None
 
 
 # ---------------------------------------------------------------------------

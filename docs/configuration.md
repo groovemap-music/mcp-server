@@ -1,15 +1,18 @@
 # MCP server configuration
 
-The server has one application setting:
+The server has two application settings:
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | `API_BASE_URL` | `http://localhost:8004` | Base URL for the GrooveMap Catalog API |
+| `GROOVEMAP_CATALOG_APP_TOKEN` | unset | Delegated Catalog API app token for the three delegated tools |
 
-The server does not currently read `API_TOKEN`, `API_TOKEN_FILE`, or any other credential
-variable, and it does not add an authorization header to Catalog API requests. Keep the
-server and its Catalog API connection inside a trusted deployment boundary until an
-authenticated upstream contract is implemented. See [transports and security](security.md).
+`app_lifespan` reads both once at startup. The server reads no other credential variable,
+and it adds an authorization header only to the delegated routes — every catalog route is
+still requested with no credential at all, so the server and its Catalog API connection
+belong inside a trusted deployment boundary either way. With
+`GROOVEMAP_CATALOG_APP_TOKEN` unset the delegated tools decline rather than calling the API.
+See [transports and security](security.md).
 
 ## Transport selection
 
