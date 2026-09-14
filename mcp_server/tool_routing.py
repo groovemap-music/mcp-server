@@ -4,16 +4,26 @@ from typing import Any
 from urllib.parse import quote as url_quote
 
 from common.agent_tools.discovery import validate_media_filter
+from common.events import consent_purposes
 from common.media import family_ids
 from mcp.server.mcpserver import Context  # noqa: TC002 -- identifies injected context to the MCP SDK
 
-from mcp_server.catalog_api import AppContext, api_get, api_post, app_context
+from mcp_server.catalog_api import AppContext, api_get, api_post, api_put, app_context, delegation_error
 from mcp_server.catalog_api import find_path as api_find_path
 
 
 _VALID_ENTITY_TYPES = frozenset({"artist", "genre", "label", "style"})
 _VALID_SEARCH_TYPES = frozenset({"artist", "label", "master", "release"})
 _MEDIA_FAMILIES = family_ids()
+
+# The four outcomes a client can report against a recommendation it showed. The published
+# event vocabulary also carries `recommendation.shown`, which is the impression itself and
+# not an outcome, so this is a narrower set rather than a slice of `event_types()`.
+_RECOMMENDATION_OUTCOMES = ("opened", "saved", "dismissed", "hidden")
+
+# The consent vocabulary comes from the runtime rather than a literal here, so this tool and
+# the producer's own 422 are answering from the same list.
+_CONSENT_PURPOSES = consent_purposes()
 
 
 def _validate_numeric_id(value: str, name: str) -> dict[str, Any] | None:
@@ -275,6 +285,98 @@ async def nlq_query(
     return await api_post(app_context(ctx), "/api/nlq/query", json_data={"query": query})
 
 
+async def record_recommendation_outcome(
+    ctx: Context[AppContext, Any],
+    impression_id: str,
+    item_id: str,
+    outcome: str,
+) -> dict[str, Any]:
+    """Report what the collector did with a recommendation that was shown to them.
+
+    One impression can accrue several outcomes over time, which is why this records an
+    event carrying the impression's id rather than updating the impression itself. Take
+    `impression_id` and `item_id` from the recommendation you are reporting on; do not
+    invent either.
+
+    Requires a delegated app token; without one this returns a
+    "delegation not configured" error and records nothing.
+
+    Args:
+        impression_id: The id of the recommendation impression being reported on.
+        item_id: The id of the recommended item the collector acted on.
+        outcome: What happened — one of {outcomes}.
+    """
+    outcome_lower = outcome.lower()
+    if outcome_lower not in _RECOMMENDATION_OUTCOMES:
+        return {"error": f"Invalid outcome: {outcome}. Must be one of: {', '.join(_RECOMMENDATION_OUTCOMES)}"}
+
+    app = app_context(ctx)
+    if error := delegation_error(app):
+        return error
+
+    return await api_post(
+        app,
+        "/api/activity/events",
+        json_data={
+            "event_type": f"recommendation.{outcome_lower}",
+            "impression_id": impression_id,
+            "item_id": item_id,
+        },
+    )
+
+
+record_recommendation_outcome.__doc__ = (record_recommendation_outcome.__doc__ or "").format(outcomes=", ".join(_RECOMMENDATION_OUTCOMES))
+
+
+async def get_consent(ctx: Context[AppContext, Any]) -> dict[str, Any]:
+    """Read the collector's current consent decisions.
+
+    Returns every purpose in the published vocabulary with whether it is granted and when
+    it was granted or revoked. A purpose nobody has acted on is reported as not granted
+    rather than omitted, so the answer always covers the whole vocabulary.
+
+    Requires a delegated app token; without one this returns a
+    "delegation not configured" error.
+    """
+    app = app_context(ctx)
+    if error := delegation_error(app):
+        return error
+
+    return await api_get(app, "/api/user/consent")
+
+
+async def set_consent(
+    ctx: Context[AppContext, Any],
+    purpose: str,
+    granted: bool,
+) -> dict[str, Any]:
+    """Grant or revoke the collector's consent for one purpose.
+
+    Idempotent in both directions: granting what is already granted and revoking what is
+    already revoked both succeed and change nothing, and the response's `changed` field is
+    what says whether this call was the one that moved it.
+
+    Only ask for this on the collector's own instruction — consent is theirs to give, and a
+    delegated token is not their decision. Requires a delegated app token; without one this
+    returns a "delegation not configured" error and changes nothing.
+
+    Args:
+        purpose: The consent purpose to set — one of {purposes}.
+        granted: True to grant consent for the purpose, False to revoke it.
+    """
+    if purpose not in _CONSENT_PURPOSES:
+        return {"error": f"Invalid purpose: {purpose}. Must be one of: {', '.join(_CONSENT_PURPOSES)}"}
+
+    app = app_context(ctx)
+    if error := delegation_error(app):
+        return error
+
+    return await api_put(app, f"/api/user/consent/{url_quote(purpose, safe='')}", json_data={"granted": granted})
+
+
+set_consent.__doc__ = (set_consent.__doc__ or "").format(purposes=", ".join(_CONSENT_PURPOSES))
+
+
 TOOL_HANDLERS = (
     search,
     get_artist_details,
@@ -288,4 +390,7 @@ TOOL_HANDLERS = (
     get_collaborators,
     get_genre_tree,
     nlq_query,
+    record_recommendation_outcome,
+    get_consent,
+    set_consent,
 )

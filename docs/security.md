@@ -26,12 +26,29 @@ adapter's bind contract requires an explicit runtime change.
 
 ## Catalog API authentication boundary
 
-The current adapter sends no bearer token or other authorization header to `catalog-api`.
-`API_BASE_URL` therefore must identify a Catalog API endpoint reachable only within the
-trusted local or deployment boundary. The promoted MCP v1 routes are public, no-token
-Catalog API routes. `catalog-api` owns route authentication and authorization where
-implemented, plus rate limiting and data-access policy; `mcp-server` must not bypass those
-controls with direct database access.
+The catalog routes are public, no-token Catalog API routes; the three delegated tools carry
+a scoped app token supplied by configuration; erasure and export are never exposed as tools.
+`API_BASE_URL` must therefore still identify a Catalog API endpoint reachable only within the
+trusted local or deployment boundary, because the catalog half of the surface is protected by
+that boundary and nothing else.
+
+The delegated half is `record_recommendation_outcome`, `get_consent`, and `set_consent`. They
+act for a collector, so they need a credential, and `GROOVEMAP_CATALOG_APP_TOKEN` is the only
+way to supply one: `app_lifespan` reads it once at startup, no tool accepts it as an argument,
+and no tool can reach the environment. With the variable unset those three tools return a
+`delegation not configured` error without making a request, which is the safe default — an
+operator opts a deployment into delegation rather than out of it. The bearer header goes only
+to the delegated routes, and the token is never logged, never echoed in an error, and never
+returned to the agent.
+
+Erasure and export are deliberately absent from the tool surface even though the promoted
+contract carries their routes. Destroying an account's data or exporting all of it is a
+session-only right that a person exercises for themselves; a delegated credential must not be
+able to do either, so no tool offers it.
+
+`catalog-api` owns route authentication and authorization, the scopes the app token is
+granted, rate limiting, and data-access policy; `mcp-server` must not bypass those controls
+with direct database access.
 
 Secrets, private endpoints, generated client configuration, and machine-specific paths
 must not be committed. Production values and secret injection belong to `deployment`.

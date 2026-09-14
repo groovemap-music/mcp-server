@@ -18,6 +18,7 @@ PUBLIC_TOOL_NAMES = {
     "find_path",
     "get_artist_details",
     "get_collaborators",
+    "get_consent",
     "get_genre_details",
     "get_genre_tree",
     "get_graph_stats",
@@ -26,7 +27,9 @@ PUBLIC_TOOL_NAMES = {
     "get_style_details",
     "get_trends",
     "nlq_query",
+    "record_recommendation_outcome",
     "search",
+    "set_consent",
 }
 SHARED_EMOJI_GUIDE = "https://github.com/groovemap-music/.github/blob/main/docs/emoji-guide.md"
 

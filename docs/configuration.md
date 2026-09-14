@@ -1,15 +1,84 @@
 # MCP server configuration
 
-The server has one application setting:
+The server has two application settings:
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | `API_BASE_URL` | `http://localhost:8004` | Base URL for the GrooveMap Catalog API |
+| `GROOVEMAP_CATALOG_APP_TOKEN` | unset | Delegated Catalog API app token for the three delegated tools |
 
-The server does not currently read `API_TOKEN`, `API_TOKEN_FILE`, or any other credential
-variable, and it does not add an authorization header to Catalog API requests. Keep the
-server and its Catalog API connection inside a trusted deployment boundary until an
-authenticated upstream contract is implemented. See [transports and security](security.md).
+`app_lifespan` reads both once at startup. The server reads no other credential variable,
+and it adds an authorization header only to the delegated routes — every catalog route is
+still requested with no credential at all, so the server and its Catalog API connection
+belong inside a trusted deployment boundary either way. With
+`GROOVEMAP_CATALOG_APP_TOKEN` unset the delegated tools decline rather than calling the API.
+See [transports and security](security.md).
+
+## Delegated app token
+
+The three delegated tools — `record_recommendation_outcome`, `get_consent`, and
+`set_consent` — act for a collector, so they need a credential that says whose account they
+are acting on. `GROOVEMAP_CATALOG_APP_TOKEN` is that credential and the only way to supply
+one. `app_lifespan` reads it once at startup; no tool accepts it as an argument, no tool can
+reach the environment, and it appears in no input schema.
+
+Delegation is opt-in. With the variable unset the server still starts, the twelve catalog
+tools behave exactly as they always have, and the three delegated tools return
+`{"error": "delegation not configured", ...}` without making a request.
+
+### Minting the token
+
+The token is a `catalog-api` app token minted by the collector whose account it acts for,
+from their own session. `catalog-api` returns the plaintext exactly once at mint time and
+can never recover it, so capture it then:
+
+```bash
+curl -X POST "$API_BASE_URL/api/user/app-tokens" \
+  -H "Authorization: Bearer <the collector's session token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "mcp-server delegation", "scopes": ["activity:write", "consent:read", "consent:write"]}'
+```
+
+Three scopes, one per delegated tool:
+
+| Scope | Grants | Used by |
+| --- | --- | --- |
+| `activity:write` | Recording an outcome against a recommendation | `record_recommendation_outcome` |
+| `consent:read` | Reading the collector's consent decisions | `get_consent` |
+| `consent:write` | Granting or revoking one consent purpose | `set_consent` |
+
+Grant only the scopes the deployment actually uses. A server that never reports outcomes
+does not need `activity:write`.
+
+Supply the result to the server the way any other secret reaches it — not on a command line
+and not in a committed client configuration:
+
+```bash
+API_BASE_URL=http://localhost:8004 GROOVEMAP_CATALOG_APP_TOKEN="$(cat ~/.config/groovemap/app-token)" uv run groovemap-mcp
+```
+
+Revoke the token in `catalog-api` if it is exposed; this repository holds no copy of it and
+has no way to invalidate one.
+
+### Prerequisite: catalog-api must accept these scopes
+
+**This is not yet true of a deployed `catalog-api`.** Today its scope vocabulary allows only
+`collection:read`, and the activity and consent routes authenticate a session rather than an
+app token. Adding the three scopes and accepting scoped app tokens on
+`POST /api/activity/events`, `GET /api/user/consent`, and `PUT /api/user/consent/{purpose}`
+is a separate `catalog-api` change. Until it ships, a configured token is accepted by this
+adapter and rejected by the producer, which surfaces here as an HTTP error result rather
+than a delegation error.
+
+### What delegation deliberately cannot do
+
+Erasure and export are session-only rights. The promoted contract carries
+`POST /api/user/erasure` and `GET /api/user/export`, and this server exposes neither as a
+tool, so no app token configured here can destroy an account's data or drain a copy of it.
+A collector exercises those rights themselves, in their own session. See
+[ADR 0010](https://github.com/groovemap-music/design/blob/main/docs/adr/0010-first-party-events-consent-and-deletion.md)
+in the `design` repository for the events, consent, and deletion model these routes
+implement, and [transports and security](security.md) for the boundary this adapter keeps.
 
 ## Transport selection
 
