@@ -16,6 +16,7 @@ expected = {
     "find_path",
     "get_artist_details",
     "get_collaborators",
+    "get_consent",
     "get_genre_details",
     "get_genre_tree",
     "get_graph_stats",
@@ -24,7 +25,9 @@ expected = {
     "get_style_details",
     "get_trends",
     "nlq_query",
+    "record_recommendation_outcome",
     "search",
+    "set_consent",
 }
 actual = {tool.name for tool in asyncio.run(mcp.list_tools())}
 assert actual == expected, (actual, expected)

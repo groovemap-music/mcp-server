@@ -21,6 +21,7 @@ __all__ = [
     "find_path",
     "get_artist_details",
     "get_collaborators",
+    "get_consent",
     "get_genre_details",
     "get_genre_tree",
     "get_graph_stats",
@@ -31,7 +32,9 @@ __all__ = [
     "main",
     "mcp",
     "nlq_query",
+    "record_recommendation_outcome",
     "search",
+    "set_consent",
 ]
 
 logger = structlog.get_logger(__name__)
@@ -39,13 +42,20 @@ logger = structlog.get_logger(__name__)
 
 @asynccontextmanager
 async def app_lifespan(server: MCPServer) -> AsyncIterator[AppContext]:  # noqa: ARG001
-    """Create and instrument the concrete Catalog API client for one server run."""
+    """Create and instrument the concrete Catalog API client for one server run.
+
+    The delegated app token is read here and only here. Reading it once at startup is what
+    makes it a deployment setting rather than something an agent can supply: no tool takes
+    it as an argument, and a tool cannot reach the environment through the lifespan state.
+    Its presence is logged; its value never is.
+    """
     base_url = getenv("API_BASE_URL", "http://localhost:8004")
+    app_token = getenv("GROOVEMAP_CATALOG_APP_TOKEN") or None
     async with httpx.AsyncClient(timeout=30.0) as client:
         instrument_httpx(client)
         start_event_loop_monitor()
-        logger.info("🚀 MCP server ready", api_base_url=base_url)
-        yield AppContext(client=client, base_url=base_url)
+        logger.info("🚀 MCP server ready", api_base_url=base_url, delegation_configured=app_token is not None)
+        yield AppContext(client=client, base_url=base_url, app_token=app_token)
         logger.info("👋 MCP server shut down")
 
 
@@ -57,7 +67,10 @@ mcp = MCPServer(
         "'get_*_details' for deep info, 'find_path' for connections, "
         "'get_trends' for timelines, 'get_graph_stats' for an overview, "
         "'get_collaborators' for artist collaboration networks, and "
-        "'get_genre_tree' for the full genre/style hierarchy."
+        "'get_genre_tree' for the full genre/style hierarchy. When the deployment "
+        "configures delegation, 'record_recommendation_outcome' reports what the "
+        "collector did with a recommendation, and 'get_consent' and 'set_consent' "
+        "read and change their consent decisions."
     ),
 )
 
@@ -74,6 +87,9 @@ mcp = MCPServer(
     get_collaborators,
     get_genre_tree,
     nlq_query,
+    record_recommendation_outcome,
+    get_consent,
+    set_consent,
 ) = register_tools(mcp)
 
 

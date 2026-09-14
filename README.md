@@ -1,6 +1,6 @@
 # GrooveMap MCP server
 
-`mcp-server` presents the GrooveMap music catalog as twelve
+`mcp-server` presents the GrooveMap music catalog as fifteen
 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) tools. It translates MCP
 tool calls into HTTP requests to the separately deployed
 [`catalog-api`](https://github.com/groovemap-music/catalog-api); it never connects directly
@@ -30,6 +30,18 @@ This repository is licensed under the [MIT License](LICENSE).
 | `get_collaborators` | Read an artist collaboration network |
 | `get_genre_tree` | Read the genre/style hierarchy |
 | `nlq_query` | Ask a natural-language graph question |
+
+The last three act for the collector rather than reading the catalog, so they require a
+delegated app token and decline without one:
+
+| Delegated tool | Purpose |
+| --- | --- |
+| `record_recommendation_outcome` | Report what the collector did with a recommendation |
+| `get_consent` | Read the collector's current consent decisions |
+| `set_consent` | Grant or revoke consent for one purpose |
+
+Erasure and export are not tools. They are session-only rights the collector exercises for
+themselves; see [transports and security](docs/security.md).
 
 The [tool reference](docs/tools.md) documents inputs, Catalog API routes, and validation.
 
@@ -86,9 +98,21 @@ machine-specific paths. See [configuration](docs/configuration.md) and
 [transport and security boundaries](docs/security.md) before exposing the server beyond a
 local process boundary.
 
-The authentication boundary is outside this adapter: the current server sends no Catalog
-API credential and configures no hosted ingress protection. Keep both hops within a trusted
-boundary unless `deployment` supplies those controls.
+The authentication boundary is mostly outside this adapter. The catalog tools send no
+Catalog API credential and this repository configures no hosted ingress protection, so keep
+both hops within a trusted boundary unless `deployment` supplies those controls.
+
+The three delegated tools are the exception. They present a `catalog-api` app token read
+once at startup from `GROOVEMAP_CATALOG_APP_TOKEN`, minted by the collector they act for
+with the scopes `activity:write`, `consent:read`, and `consent:write`. Delegation is opt-in:
+with the variable unset those three tools decline without calling the API and everything
+else is unaffected. Accepting scoped app tokens on the activity and consent routes is a
+`catalog-api` change that has not shipped yet, so configure the token only against a
+producer that has it. Erasure and export are session-only rights and are exposed as no tool
+at all. The [configuration guide](docs/configuration.md#delegated-app-token) covers minting,
+the scopes, and the prerequisite; see
+[ADR 0010](https://github.com/groovemap-music/design/blob/main/docs/adr/0010-first-party-events-consent-and-deletion.md)
+in the `design` repository for the model behind them.
 
 ## Observability
 

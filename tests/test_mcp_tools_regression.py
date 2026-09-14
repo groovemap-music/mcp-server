@@ -13,6 +13,7 @@ async def test_mcp_tool_names_still_exported() -> None:
         find_path,
         get_artist_details,
         get_collaborators,
+        get_consent,
         get_genre_details,
         get_genre_tree,
         get_graph_stats,
@@ -21,13 +22,16 @@ async def test_mcp_tool_names_still_exported() -> None:
         get_style_details,
         get_trends,
         nlq_query,
+        record_recommendation_outcome,
         search,
+        set_consent,
     )
 
     for fn in (
         find_path,
         get_artist_details,
         get_collaborators,
+        get_consent,
         get_genre_details,
         get_genre_tree,
         get_graph_stats,
@@ -36,7 +40,9 @@ async def test_mcp_tool_names_still_exported() -> None:
         get_style_details,
         get_trends,
         nlq_query,
+        record_recommendation_outcome,
         search,
+        set_consent,
     ):
         assert callable(fn)
 
@@ -49,6 +55,7 @@ async def test_mcp_tool_input_schemas_remain_stable() -> None:
         "find_path": ({"from_name", "from_type", "to_name", "to_type", "max_depth"}, {"from_name", "from_type", "to_name", "to_type"}),
         "get_artist_details": ({"artist_id"}, {"artist_id"}),
         "get_collaborators": ({"artist_id", "limit"}, {"artist_id"}),
+        "get_consent": (set(), set()),
         "get_genre_details": ({"genre_name"}, {"genre_name"}),
         "get_genre_tree": (set(), set()),
         "get_graph_stats": (set(), set()),
@@ -57,7 +64,12 @@ async def test_mcp_tool_input_schemas_remain_stable() -> None:
         "get_style_details": ({"style_name"}, {"style_name"}),
         "get_trends": ({"name", "entity_type"}, {"name"}),
         "nlq_query": ({"query"}, {"query"}),
+        "record_recommendation_outcome": (
+            {"impression_id", "item_id", "outcome"},
+            {"impression_id", "item_id", "outcome"},
+        ),
         "search": ({"query", "types", "media", "limit"}, {"query"}),
+        "set_consent": ({"purpose", "granted"}, {"purpose", "granted"}),
     }
 
     tools = await mcp.list_tools()
