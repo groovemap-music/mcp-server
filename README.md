@@ -100,9 +100,19 @@ local process boundary.
 
 The authentication boundary is mostly outside this adapter. The catalog tools send no
 Catalog API credential and this repository configures no hosted ingress protection, so keep
-both hops within a trusted boundary unless `deployment` supplies those controls. The three
-delegated tools are the exception: they present the app token in
-`GROOVEMAP_CATALOG_APP_TOKEN` and decline when it is unset.
+both hops within a trusted boundary unless `deployment` supplies those controls.
+
+The three delegated tools are the exception. They present a `catalog-api` app token read
+once at startup from `GROOVEMAP_CATALOG_APP_TOKEN`, minted by the collector they act for
+with the scopes `activity:write`, `consent:read`, and `consent:write`. Delegation is opt-in:
+with the variable unset those three tools decline without calling the API and everything
+else is unaffected. Accepting scoped app tokens on the activity and consent routes is a
+`catalog-api` change that has not shipped yet, so configure the token only against a
+producer that has it. Erasure and export are session-only rights and are exposed as no tool
+at all. The [configuration guide](docs/configuration.md#delegated-app-token) covers minting,
+the scopes, and the prerequisite; see
+[ADR 0010](https://github.com/groovemap-music/design/blob/main/docs/adr/0010-first-party-events-consent-and-deletion.md)
+in the `design` repository for the model behind them.
 
 ## Observability
 
