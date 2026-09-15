@@ -26,6 +26,7 @@ PUBLIC_TOOL_NAMES = {
     "get_release_details",
     "get_style_details",
     "get_trends",
+    "lookup_release",
     "nlq_query",
     "record_recommendation_outcome",
     "search",

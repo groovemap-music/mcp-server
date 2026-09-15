@@ -22,7 +22,7 @@ are acting on. `GROOVEMAP_CATALOG_APP_TOKEN` is that credential and the only way
 one. `app_lifespan` reads it once at startup; no tool accepts it as an argument, no tool can
 reach the environment, and it appears in no input schema.
 
-Delegation is opt-in. With the variable unset the server still starts, the twelve catalog
+Delegation is opt-in. With the variable unset the server still starts, the thirteen catalog
 tools behave exactly as they always have, and the three delegated tools return
 `{"error": "delegation not configured", ...}` without making a request.
 

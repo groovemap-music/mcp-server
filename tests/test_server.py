@@ -662,6 +662,75 @@ class TestGetGenreTree:
 
 
 # ---------------------------------------------------------------------------
+# Tool: lookup_release
+# ---------------------------------------------------------------------------
+
+
+class TestLookupRelease:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("provider", ["barcode", "catalog_number", "matrix"])
+    async def test_resolves_each_documented_provider(self, mock_context, app_ctx, provider):
+        from mcp_server.server import lookup_release
+
+        fake_response = {
+            "provider": provider,
+            "value": "012345678905",
+            "normalized": "012345678905",
+            "gm_id": "1",
+            "releases": [{"id": "1", "name": "Kind of Blue"}],
+        }
+        app_ctx.client.get = AsyncMock(return_value=_mock_response(fake_response))
+
+        result = await lookup_release(provider=provider, value="012345678905", ctx=mock_context)
+
+        assert result == fake_response
+        assert app_ctx.client.get.call_args.args[0] == f"http://test-api:8004/api/lookup/{provider}/012345678905"
+
+    @pytest.mark.asyncio
+    async def test_url_quotes_the_value(self, mock_context, app_ctx):
+        from mcp_server.server import lookup_release
+
+        app_ctx.client.get = AsyncMock(return_value=_mock_response({"releases": []}))
+
+        await lookup_release(provider="matrix", value="A1/B1 side", ctx=mock_context)
+
+        assert app_ctx.client.get.call_args.args[0] == "http://test-api:8004/api/lookup/matrix/A1%2FB1%20side"
+
+    @pytest.mark.asyncio
+    async def test_not_found(self, mock_context, app_ctx):
+        from mcp_server.server import lookup_release
+
+        app_ctx.client.get = AsyncMock(return_value=_mock_response({"error": "No release found for barcode '000'"}, status_code=404))
+
+        result = await lookup_release(provider="barcode", value="000", ctx=mock_context)
+
+        assert "error" in result
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("provider", ["label_code", "BARCODE", "../admin", ""])
+    async def test_an_unknown_provider_never_reaches_the_api(self, mock_context, app_ctx, provider):
+        from mcp_server.server import lookup_release
+
+        app_ctx.client.get = AsyncMock()
+
+        result = await lookup_release(provider=provider, value="012345678905", ctx=mock_context)
+
+        assert "Invalid provider" in result["error"]
+        app_ctx.client.get.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_sends_no_authorization_header_even_when_delegation_is_configured(self, delegated_context, delegated_ctx):
+        """Public route: a configured app token must never reach `lookup_release`."""
+        from mcp_server.server import lookup_release
+
+        delegated_ctx.client.get = AsyncMock(return_value=_mock_response({"releases": []}))
+
+        await lookup_release(provider="barcode", value="012345678905", ctx=delegated_context)
+
+        assert "headers" not in delegated_ctx.client.get.call_args.kwargs
+
+
+# ---------------------------------------------------------------------------
 # Helper: _api_get
 # ---------------------------------------------------------------------------
 
@@ -960,7 +1029,7 @@ class TestDelegatedTokenBoundary:
     """Where the bearer header goes, where it does not, and what it never reaches."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("path", ["/api/search", "/api/graph/stats", "/api/node/12345", "/api/user/export"])
+    @pytest.mark.parametrize("path", ["/api/search", "/api/graph/stats", "/api/node/12345", "/api/user/export", "/api/lookup/barcode/012345678905"])
     async def test_public_routes_send_no_authorization_header(self, delegated_ctx, path):
         """A configured token changes nothing about a catalog route's request."""
         from mcp_server.catalog_api import api_get
