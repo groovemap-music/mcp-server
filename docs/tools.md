@@ -1,6 +1,6 @@
 # MCP tool reference
 
-The server exports exactly fifteen tools: twelve that read the catalog and three that act for
+The server exports exactly sixteen tools: thirteen that read the catalog and three that act for
 the collector. The MCP SDK derives the input schemas from the typed handlers in
 `mcp_server.tool_routing`; injected `ctx` is never exposed as an input, and neither is the
 delegated app token. All data operations use the promoted Catalog API v1
@@ -24,6 +24,7 @@ revision and digest.
 | `get_collaborators` | `artist_id: string` | `limit: integer = 20` | `GET /api/collaborators/{artist_id}` |
 | `get_genre_tree` | none | none | `GET /api/genre-tree` |
 | `nlq_query` | `query: string` | none | `POST /api/nlq/query` |
+| `lookup_release` | `provider: string`; `value: string` | none | `GET /api/lookup/{provider}/{value}` |
 
 ## Delegated tools
 
@@ -65,6 +66,10 @@ unauthenticated write.
 - Artist, label, and release identifiers must be numeric strings.
 - Genre and style names are URL-encoded before they become route segments, as is
   `set_consent`'s `purpose`.
+- `lookup_release`'s `provider` is matched against `barcode`, `catalog_number`, and `matrix`
+  before any request; `value` is URL-encoded before it becomes a route segment. Both a value
+  no alias carries and one whose alias points at no loaded release are returned by the
+  producer as the same "no release found" error.
 - `record_recommendation_outcome`'s `outcome` is matched case-insensitively against `opened`,
   `saved`, `dismissed`, and `hidden`, and `set_consent`'s `purpose` against the published
   consent vocabulary (`product_analytics` and `model_training`). Both are checked before the

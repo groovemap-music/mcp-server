@@ -16,6 +16,12 @@ _VALID_ENTITY_TYPES = frozenset({"artist", "genre", "label", "style"})
 _VALID_SEARCH_TYPES = frozenset({"artist", "label", "master", "release"})
 _MEDIA_FAMILIES = family_ids()
 
+# The three ADR 0009 alias namespaces the producer's public lookup route can resolve. Kept
+# as a literal here rather than sourced from the producer's vendored `common.identifiers`
+# vocabulary, which this adapter does not depend on; the promoted contract is the only thing
+# tying this set to what the route actually accepts.
+_VALID_LOOKUP_PROVIDERS = frozenset({"barcode", "catalog_number", "matrix"})
+
 # The four outcomes a client can report against a recommendation it showed. The published
 # event vocabulary also carries `recommendation.shown`, which is the impression itself and
 # not an outcome, so this is a narrower set rather than a slice of `event_types()`.
@@ -285,6 +291,33 @@ async def nlq_query(
     return await api_post(app_context(ctx), "/api/nlq/query", json_data={"query": query})
 
 
+async def lookup_release(
+    ctx: Context[AppContext, Any],
+    provider: str,
+    value: str,
+) -> dict[str, Any]:
+    """Resolve a catalogue identifier to the release(s) that carry it.
+
+    This is the lookup a collector does with the record in their hands: the barcode on the
+    sleeve, the catalogue number on the label, or the matrix/runout inscription is often the
+    only thing they can type. Use this instead of 'search' when you have one of these
+    identifiers rather than a name.
+
+    Public route; no delegated app token required.
+
+    Args:
+        provider: The identifier namespace — one of {providers}.
+        value: The identifier value as read off the release (barcode digits, catalogue
+            number, or matrix/runout inscription), exactly as given.
+    """
+    if provider not in _VALID_LOOKUP_PROVIDERS:
+        return {"error": f"Invalid provider: {provider}. Must be one of: {', '.join(sorted(_VALID_LOOKUP_PROVIDERS))}"}
+    return await api_get(app_context(ctx), f"/api/lookup/{provider}/{url_quote(value, safe='')}")
+
+
+lookup_release.__doc__ = (lookup_release.__doc__ or "").format(providers=", ".join(sorted(_VALID_LOOKUP_PROVIDERS)))
+
+
 async def record_recommendation_outcome(
     ctx: Context[AppContext, Any],
     impression_id: str,
@@ -390,6 +423,7 @@ TOOL_HANDLERS = (
     get_collaborators,
     get_genre_tree,
     nlq_query,
+    lookup_release,
     record_recommendation_outcome,
     get_consent,
     set_consent,
