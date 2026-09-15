@@ -1,6 +1,6 @@
 # GrooveMap MCP server
 
-`mcp-server` presents the GrooveMap music catalog as fifteen
+`mcp-server` presents the GrooveMap music catalog as sixteen
 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) tools. It translates MCP
 tool calls into HTTP requests to the separately deployed
 [`catalog-api`](https://github.com/groovemap-music/catalog-api); it never connects directly
@@ -30,6 +30,7 @@ This repository is licensed under the [MIT License](LICENSE).
 | `get_collaborators` | Read an artist collaboration network |
 | `get_genre_tree` | Read the genre/style hierarchy |
 | `nlq_query` | Ask a natural-language graph question |
+| `lookup_release` | Resolve a barcode, catalogue number, or matrix inscription to a release |
 
 The last three act for the collector rather than reading the catalog, so they require a
 delegated app token and decline without one:

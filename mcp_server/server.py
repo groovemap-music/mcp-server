@@ -29,6 +29,7 @@ __all__ = [
     "get_release_details",
     "get_style_details",
     "get_trends",
+    "lookup_release",
     "main",
     "mcp",
     "nlq_query",
@@ -66,10 +67,11 @@ mcp = MCPServer(
         "Music knowledge graph server. Use 'search' to find entities, "
         "'get_*_details' for deep info, 'find_path' for connections, "
         "'get_trends' for timelines, 'get_graph_stats' for an overview, "
-        "'get_collaborators' for artist collaboration networks, and "
-        "'get_genre_tree' for the full genre/style hierarchy. When the deployment "
-        "configures delegation, 'record_recommendation_outcome' reports what the "
-        "collector did with a recommendation, and 'get_consent' and 'set_consent' "
+        "'get_collaborators' for artist collaboration networks, "
+        "'get_genre_tree' for the full genre/style hierarchy, and 'lookup_release' to "
+        "resolve a barcode, catalogue number, or matrix inscription straight off a record. "
+        "When the deployment configures delegation, 'record_recommendation_outcome' reports "
+        "what the collector did with a recommendation, and 'get_consent' and 'set_consent' "
         "read and change their consent decisions."
     ),
 )
@@ -87,6 +89,7 @@ mcp = MCPServer(
     get_collaborators,
     get_genre_tree,
     nlq_query,
+    lookup_release,
     record_recommendation_outcome,
     get_consent,
     set_consent,

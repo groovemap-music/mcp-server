@@ -21,6 +21,7 @@ async def test_mcp_tool_names_still_exported() -> None:
         get_release_details,
         get_style_details,
         get_trends,
+        lookup_release,
         nlq_query,
         record_recommendation_outcome,
         search,
@@ -39,6 +40,7 @@ async def test_mcp_tool_names_still_exported() -> None:
         get_release_details,
         get_style_details,
         get_trends,
+        lookup_release,
         nlq_query,
         record_recommendation_outcome,
         search,
@@ -63,6 +65,7 @@ async def test_mcp_tool_input_schemas_remain_stable() -> None:
         "get_release_details": ({"release_id"}, {"release_id"}),
         "get_style_details": ({"style_name"}, {"style_name"}),
         "get_trends": ({"name", "entity_type"}, {"name"}),
+        "lookup_release": ({"provider", "value"}, {"provider", "value"}),
         "nlq_query": ({"query"}, {"query"}),
         "record_recommendation_outcome": (
             {"impression_id", "item_id", "outcome"},
