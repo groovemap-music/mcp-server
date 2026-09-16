@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here by Commitizen.
 
+## v0.2.2 (2026-09-15)
+
+### Fix
+
+- **release**: wrap bump-preview in the shared tolerant Commitizen script
+
 ## v0.2.1 (2026-09-15)
 
 ### Fix
