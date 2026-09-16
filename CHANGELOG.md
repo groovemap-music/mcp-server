@@ -47,7 +47,7 @@ All notable changes to this project will be documented here by Commitizen.
 - **deps**: CVE-2026-69247, full dependency refresh, and cooldown policy (#447)
 - deployment portability & config correctness — 6 bug-hunt findings (batch:deploy-config) (#439)
 - insights/Neo4j performance failures — P1 rarity timeout + 4 related (batch:insights-perf) (#435)
-- deep bug-hunt 2026-07-19 — land all 72 P0/P1/P2 fixes (epic discogsography-cu2) (#420)
+- deep bug-hunt 2026-07-19 — land all 72 P0/P1/P2 fixes (#420)
 - **postgres**: right-size pools & bound brainztableinator concurrency to fit shared PgBouncer cap (#396)
 - **config**: accept host:port in POSTGRES_HOST (pooler support) (#393)
 - **common**: support REDIS_PASSWORD for authenticated Redis connections (#357)
