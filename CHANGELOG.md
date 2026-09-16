@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here by Commitizen.
 
+## v0.2.1 (2026-09-15)
+
+### Fix
+
+- **changelog**: drop the legacy epic reference the docs gate rejects
+
 ## v0.2.0 (2026-09-15)
 
 ### Feat
