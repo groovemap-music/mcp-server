@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here by Commitizen.
 
+## Unreleased
+
+### Feat
+
+- **tools**: document and regression-protect company credits in release details
+
 ## v0.2.2 (2026-09-15)
 
 ### Fix

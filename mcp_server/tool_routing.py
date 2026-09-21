@@ -136,6 +136,9 @@ async def get_release_details(
       - `release_kind`: "album", "single", "ep", "broadcast", "other", or null.
       - `edition`: edition facts such as "reissue", "remastered", "limited", "promo".
       - `unmapped`: raw provider values the taxonomy did not recognize, kept for coverage.
+    The company credits, when present, arrive unchanged in the ADR 0011 top-level `companies`
+    block: `companies_version`, `items` (each with `name`, `discogs_id`, `role`,
+    `role_category`, and `catno`), `role_categories`, and `unmapped` roles.
     Use the `media` filter on 'search' to find cassette-only or CD-only releases before
     calling this tool. Use 'search' first to find the release's ID.
 
