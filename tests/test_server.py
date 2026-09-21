@@ -341,6 +341,51 @@ class TestGetReleaseDetails:
             assert field in doc, f"get_release_details docstring is missing the `{field}` field"
 
     @pytest.mark.asyncio
+    async def test_passes_through_company_credits_unchanged(self, mock_context, app_ctx):
+        """The ADR 0011 companies block reaches MCP callers without role remapping."""
+        from mcp_server.server import get_release_details
+
+        companies = {
+            "companies_version": "1",
+            "items": [
+                {
+                    "name": "Damont",
+                    "discogs_id": 12345,
+                    "role": "Pressed By",
+                    "role_category": "pressing",
+                    "catno": None,
+                }
+            ],
+            "role_categories": ["pressing"],
+            "unmapped": {"roles": []},
+        }
+        fake = {"id": "1", "name": "Kind of Blue", "companies": companies}
+        app_ctx.client.get = AsyncMock(return_value=_mock_response(fake))
+
+        result = await get_release_details(release_id="1", ctx=mock_context)
+
+        assert result == fake
+
+    def test_docstring_documents_company_credits(self):
+        from mcp_server.server import get_release_details
+
+        doc = get_release_details.__doc__ or ""
+        for field in (
+            "company credits",
+            "companies",
+            "companies_version",
+            "items",
+            "name",
+            "discogs_id",
+            "role",
+            "role_category",
+            "catno",
+            "role_categories",
+            "unmapped",
+        ):
+            assert field in doc, f"get_release_details docstring is missing `{field}`"
+
+    @pytest.mark.asyncio
     async def test_not_found(self, mock_context, app_ctx):
         from mcp_server.server import get_release_details
 
