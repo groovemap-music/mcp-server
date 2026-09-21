@@ -105,6 +105,15 @@ Both `search` and `get_release_details` speak the ADR 0007 canonical media taxon
   in the `design` repository for the full block shape, including `packaging`, `container`,
   `traits`, and `flags`.
 
+## Company credits block
+
+`get_release_details` also passes through the ADR 0011 top-level `companies` block
+unchanged when supplied by the Catalog API. `companies_version` identifies the block
+schema; `items` contains company credits with `name`, numeric `discogs_id`, original
+`role`, normalized `role_category`, and optional `catno`. `role_categories` lists the
+categories present, while `unmapped.roles` retains provider roles outside the taxonomy.
+The tool does not infer, rename, or discard company credits.
+
 `Discogs` in an argument description means the upstream catalog identifier namespace. It
 is a data-source protocol term, not the name of this server or the GrooveMap project.
 
