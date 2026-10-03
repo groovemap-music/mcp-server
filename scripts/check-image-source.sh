@@ -13,7 +13,7 @@ if ! git -C "${repo_root}" diff --quiet HEAD --; then
   exit 2
 fi
 
-# The reusable workflow checks out the pinned private library inside the
+# The reusable workflow checks out the pinned shared library inside the
 # workspace. That checkout is build input, not first-party source, and its
 # cleanliness and revision are verified by prepare-library-wheels.sh. Permit
 # only that explicitly configured directory; every other untracked path fails

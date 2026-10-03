@@ -75,8 +75,9 @@ async def _call(
     """Send one promoted Catalog API request and preserve the established JSON/error mapping.
 
     `send` is the bound httpx verb, so each verb helper keeps its own call shape and the
-    per-route authorization decision is made in exactly one place. Neither the token nor the
-    header is logged or returned: a failure reports the URL and the status, nothing else.
+    per-route authorization decision is made in exactly one place. HTTP-status failures
+    report only the URL and status. Other failures preserve the exception representation
+    in logs and its message in the response; this boundary does not sanitize those messages.
     """
     url = f"{app.base_url}{path}"
     try:
