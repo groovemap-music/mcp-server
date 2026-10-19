@@ -1,7 +1,7 @@
 # MCP server architecture
 
 The `mcp-server` repository adapts GrooveMap's HTTP catalog interface to Model Context
-Protocol tools. It deliberately has no direct Neo4j, PostgreSQL, RabbitMQ, or Redis
+Protocol tools. It deliberately has no direct Neo4j, PostgreSQL, RabbitMQ, or Valkey
 access.
 
 ```mermaid
