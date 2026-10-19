@@ -24,7 +24,7 @@ dependencies = [
     "groovemap-agent-tools==0.1.0",
     "groovemap-runtime[otel,otel-http]==0.1.0",
     "httpx>=0.28.1",
-    "mcp[cli]>=2.0.0",
+    "mcp[cli]>=2.2.0",
     "structlog>=26.1.0",
 ]
 
@@ -38,10 +38,10 @@ Issues = "https://github.com/groovemap-music/mcp-server/issues"
 
 [dependency-groups]
 dev = [
-    "build>=1.6.0",
-    "commitizen>=4.18.0",
-    "cyclonedx-bom>=7.3.1",
-    "mypy>=2.3.1",
+    "build>=1.6.1",
+    "commitizen>=4.19.2",
+    "cyclonedx-bom>=7.5.0",
+    "mypy>=2.4.0",
     "pip-audit>=2.10.1",
     "pip-licenses>=5.5.5",
     "pytest>=9.1.1",
