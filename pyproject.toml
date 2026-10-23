@@ -56,7 +56,10 @@ dev = [
 packages = ["mcp_server"]
 
 [tool.uv]
-exclude-newer = "2 days"
+exclude-newer = "7 days"
+# Security exception: certifi 2026.10.19 fixes PYSEC-2026-4320 and is inside the
+# 7-day window. Remove after 2026-10-27T02:24:17Z, when the window covers it.
+exclude-newer-package = { certifi = "2026-10-20T02:24:17Z" }
 
 [tool.uv.sources]
 groovemap-agent-tools = { git = "https://github.com/groovemap-music/python-libraries.git", rev = "2d7b1a5b8766ff915a39e66a3e70013d092c1bc1", subdirectory = "agent-tools" }
