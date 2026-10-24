@@ -4,7 +4,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-AUTOMATION_REVISION = "833cb464507678c38ab78bd4718ce697399463e9"
+CI_AUTOMATION_REVISION = "dbf22ed83d486e9484fc8c6385c7c3e5995700e4"
+RELEASE_AUTOMATION_REVISION = "833cb464507678c38ab78bd4718ce697399463e9"
 PYTHON_LIBRARIES_REVISION = "2d7b1a5b8766ff915a39e66a3e70013d092c1bc1"
 
 
@@ -29,7 +30,7 @@ require(
     "  push:\n    branches: [main]\n",
     "  schedule:\n",
     "  workflow_dispatch:\n",
-    f"uses: groovemap-music/automation/.github/workflows/reusable-ci.yml@{AUTOMATION_REVISION}",
+    f"uses: groovemap-music/automation/.github/workflows/reusable-ci.yml@{CI_AUTOMATION_REVISION}",
     "language: python",
     "check-command: just ci-check",
     "coverage-command: just coverage",
@@ -69,7 +70,7 @@ require(
     "  attestations: write",
     "  id-token: write",
     "  packages: write",
-    f"uses: groovemap-music/automation/.github/workflows/reusable-release.yml@{AUTOMATION_REVISION}",
+    f"uses: groovemap-music/automation/.github/workflows/reusable-release.yml@{RELEASE_AUTOMATION_REVISION}",
     "repository-name: mcp-server",
     "release-command: just release-dry-run",
     "publish-image: true",
