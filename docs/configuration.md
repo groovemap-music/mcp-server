@@ -60,15 +60,15 @@ API_BASE_URL=http://localhost:8004 GROOVEMAP_CATALOG_APP_TOKEN="$(cat ~/.config/
 Revoke the token in `catalog-api` if it is exposed; this repository holds no copy of it and
 has no way to invalidate one.
 
-### Prerequisite: catalog-api must accept these scopes
+### Producer requirement: catalog-api must accept these scopes
 
-**This is not yet true of a deployed `catalog-api`.** Today its scope vocabulary allows only
-`collection:read`, and the activity and consent routes authenticate a session rather than an
-app token. Adding the three scopes and accepting scoped app tokens on
-`POST /api/activity/events`, `GET /api/user/consent`, and `PUT /api/user/consent/{purpose}`
-is a separate `catalog-api` change. Until it ships, a configured token is accepted by this
-adapter and rejected by the producer, which surfaces here as an HTTP error result rather
-than a delegation error.
+`catalog-api` `v0.2.0` and later include the three scopes in its app-token vocabulary and
+accept a scoped app token on `POST /api/activity/events`, `GET /api/user/consent`, and
+`PUT /api/user/consent/{purpose}`; the producer revision pinned by the promoted contract is
+one of them. An older producer allows only `collection:read` and authenticates those routes
+with a session alone. Against such a producer a configured token is accepted by this adapter
+and rejected by the producer, which surfaces here as an HTTP error result rather than a
+delegation error.
 
 ### What delegation deliberately cannot do
 

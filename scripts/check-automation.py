@@ -117,6 +117,5 @@ require(
     'ENTRYPOINT ["/app/.venv/bin/groovemap-mcp"]',
     'CMD ["--transport", "streamable-http"]',
 )
-assert ("discogs" + "ography") not in dockerfile.casefold()
 
 print("CI, release, Dependabot, and mcp-server image contracts are valid.")

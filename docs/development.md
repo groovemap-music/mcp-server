@@ -13,7 +13,7 @@ The maintained recipe graph is:
 | Recipe | Contract |
 | --- | --- |
 | `just source-check` | Run format, lint, documentation, and promoted-contract checks. |
-| `just protocol-check` | Verify the twelve registered tools, stable input schemas, shared path policy, and promoted route contract. |
+| `just protocol-check` | Verify the sixteen registered tools, stable input schemas, shared path policy, and promoted route contract. |
 | `just automation-check` | Run Actionlint and verify workflow, recipe, dependency, and image policy. |
 | `just ci-check` | Run source, type, protocol, automation, and version-preview checks. This is CI's primary check command. |
 | `just test` / `just coverage` | Run the adapter suite and write `coverage.xml`; `coverage` is the CI-facing alias. |

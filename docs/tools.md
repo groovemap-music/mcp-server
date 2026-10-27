@@ -71,8 +71,8 @@ unauthenticated write.
   no alias carries and one whose alias points at no loaded release are returned by the
   producer as the same "no release found" error.
 - `record_recommendation_outcome`'s `outcome` is matched case-insensitively against `opened`,
-  `saved`, `dismissed`, and `hidden`, and `set_consent`'s `purpose` against the published
-  consent vocabulary (`product_analytics` and `model_training`). Both are checked before the
+  `saved`, `dismissed`, and `hidden`, and `set_consent`'s `purpose` is matched exactly against
+  the published consent vocabulary (`product_analytics` and `model_training`). Both are checked before the
   delegation check and before any request, so a value outside the vocabulary is an MCP error
   here rather than a 422 from the producer.
 - Catalog API HTTP and transport failures become structured MCP error results instead of
