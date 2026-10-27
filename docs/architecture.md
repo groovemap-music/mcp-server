@@ -31,8 +31,8 @@ flowchart LR
 The promoted contract under [`contracts/catalog-api/mcp-server/v1`](../contracts/catalog-api/mcp-server/v1)
 is the compatibility boundary. [`routes.json`](../contracts/catalog-api/mcp-server/v1/routes.json)
 is version 1 and records every operation `catalog-api` publishes for this consumer,
-including the erasure, export, and release-fit routes no tool exposes; twelve of them back
-the sixteen tools.
+including the erasure, export, release-fit, and copy-observation routes no tool exposes;
+twelve of them back the sixteen tools.
 [`source.json`](../contracts/catalog-api/mcp-server/v1/source.json) pins the `catalog-api`
 producer repository and commit plus the routes digest. `just contract-check` verifies the
 digest, version, and every literal adapter route; `just protocol-check` also verifies the

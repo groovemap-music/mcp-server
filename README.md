@@ -107,11 +107,11 @@ The three delegated tools are the exception. They present a `catalog-api` app to
 once at startup from `GROOVEMAP_CATALOG_APP_TOKEN`, minted by the collector they act for
 with the scopes `activity:write`, `consent:read`, and `consent:write`. Delegation is opt-in:
 with the variable unset those three tools decline without calling the API and everything
-else is unaffected. Accepting scoped app tokens on the activity and consent routes is a
-`catalog-api` change that has not shipped yet, so configure the token only against a
-producer that has it. Erasure and export are session-only rights and are exposed as no tool
+else is unaffected. The producer must accept scoped app tokens on the activity and consent
+routes, which `catalog-api` does from `v0.2.0`; configure the token only against such a
+producer. Erasure and export are session-only rights and are exposed as no tool
 at all. The [configuration guide](docs/configuration.md#delegated-app-token) covers minting,
-the scopes, and the prerequisite; see
+the scopes, and the producer requirement; see
 [ADR 0010](https://github.com/groovemap-music/design/blob/main/docs/adr/0010-first-party-events-consent-and-deletion.md)
 in the `design` repository for the model behind them.
 
@@ -129,9 +129,9 @@ the SDK's `tools/call {tool}` server span. Catalog API requests are instrumented
 `instrument_httpx`, so each request is a child of the adapter span and carries
 `traceparent` into `catalog-api`.
 
-The process view (`process.cpu.time`, `process.memory.usage`, `process.thread.count`,
-`process.open_file_descriptor.count`, `process.context_switches`, and the CPython
-garbage-collection counter) arrives with `setup_telemetry`. The server does run an asyncio
+The process view (`process.cpu.time`, `process.cpu.utilization`, `process.memory.usage`,
+`process.memory.virtual`, `process.thread.count`, `process.open_file_descriptor.count`,
+`process.context_switches`, and the CPython garbage-collection counter) arrives with `setup_telemetry`. The server does run an asyncio
 loop — `mcp.run()` creates it for both transports — so the lifespan also starts
 `start_event_loop_monitor()`, which samples `groovemap.runtime.event_loop.lag`.
 

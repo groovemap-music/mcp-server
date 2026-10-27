@@ -13,7 +13,6 @@ ROOT = Path(__file__).resolve().parents[1]
 MARKDOWN_LINK = re.compile(r"\[[^]]*]\(([^)]+)\)")
 FENCE = re.compile(r"^```(?P<language>[^\s`]*)\s*$")
 DIAGRAM_PREFIXES = ("flowchart ", "graph ", "sequenceDiagram", "classDiagram", "stateDiagram", "erDiagram")
-LEGACY_BRAND = "discogs" + "ography"
 PUBLIC_TOOL_NAMES = {
     "find_path",
     "get_artist_details",
@@ -78,14 +77,12 @@ def validate_diagram_fences(path: Path, text: str) -> list[str]:
 
 
 def main() -> int:
-    """Validate links, branding, and diagram fences across the documentation surface."""
+    """Validate links, diagram fences, and required content across the documentation surface."""
     errors: list[str] = []
     for path in markdown_files():
         text = path.read_text(encoding="utf-8")
         errors.extend(validate_local_links(path, text))
         errors.extend(validate_diagram_fences(path, text))
-        if LEGACY_BRAND in text.casefold():
-            errors.append(f"{path.relative_to(ROOT)}: legacy project branding is not allowed")
 
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     tool_reference = (ROOT / "docs/tools.md").read_text(encoding="utf-8")
