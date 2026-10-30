@@ -62,9 +62,10 @@ async def search(
             narrower medium ids beneath it (e.g. vinyl_12, optical_cd). An unknown id returns
             an error naming it.
         country: Optional release countries to narrow release results only, for example
-            ["Japan", "Germany"]. Artist and label hits are not filtered by country. Values are
-            matched exactly as the catalog stores them, which for Discogs data means country
-            names rather than ISO codes. Blank values are ignored.
+            ["Japan", "Germany"]. Artist and label hits are not filtered by country, and releases
+            with no recorded country are still included. Values are matched exactly as the catalog
+            stores them, which for Discogs data means country names rather than ISO codes. Blank
+            values are ignored.
         limit: Maximum results to return (1-100, default 20).
     """
     requested = [entity_type.strip().lower() for entity_type in types.split(",") if entity_type.strip()]

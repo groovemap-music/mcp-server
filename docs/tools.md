@@ -90,10 +90,12 @@ Both `search` and `get_release_details` speak the ADR 0007 canonical media taxon
   every medium in that family; a medium id matches only itself. Ids are validated against the
   taxonomy before the request reaches the Catalog API, which reads the filter as repeated
   `media` query parameters on `GET /api/search`.
-- **`search`'s `country` filter** narrows release results only (artist and label hits are not filtered; catalog-api applies the clause on the releases branch alone) and takes release country values, sent as repeated `country`
-  query parameters on `GET /api/search` and omitted when not given. The Catalog API matches
-  each value exactly as the catalog stores it (Discogs writes country names such as `Japan`,
-  not ISO codes; no case or code folding) and strips blank values (`catalog-api`
+- **`search`'s `country` filter** narrows release results only: artist and label hits are not
+  filtered. Releases with no recorded country are still included, since catalog-api's clause is
+  `country IS NULL OR country = ANY(...)`. Values are sent as repeated `country` query
+  parameters on `GET /api/search` and omitted when not given. The Catalog API matches each
+  value exactly as the catalog stores it (Discogs writes country names such as `Japan`, not ISO
+  codes; no case or code folding) and strips blank values (`catalog-api`
   `api/routers/search.py:122-162`, `api/queries/search_queries.py:185-207`).
 - **`get_release_details`'s response** carries an additive top-level `media` block when the
   release has media data:
