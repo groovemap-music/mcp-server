@@ -71,7 +71,7 @@ async def test_mcp_tool_input_schemas_remain_stable() -> None:
             {"impression_id", "item_id", "outcome"},
             {"impression_id", "item_id", "outcome"},
         ),
-        "search": ({"query", "types", "media", "limit"}, {"query"}),
+        "search": ({"query", "types", "media", "country", "limit"}, {"query"}),
         "set_consent": ({"purpose", "granted"}, {"purpose", "granted"}),
     }
 
