@@ -44,6 +44,7 @@ async def search(
     query: str,
     types: str = "artist,label,master,release",
     media: list[str] | None = None,
+    country: list[str] | None = None,
     limit: int = 20,
 ) -> dict[str, Any]:
     """Search the music database across artists, labels, masters, and releases.
@@ -60,6 +61,9 @@ async def search(
             ["optical_cd"] matches CD only. Valid families: {families}. Each family also has
             narrower medium ids beneath it (e.g. vinyl_12, optical_cd). An unknown id returns
             an error naming it.
+        country: Optional release countries (ADR 0011) to narrow release results, for example
+            ["Japan", "Germany"]. Values are matched exactly as the catalog stores them, which
+            for Discogs data means country names rather than ISO codes. Blank values are ignored.
         limit: Maximum results to return (1-100, default 20).
     """
     requested = [entity_type.strip().lower() for entity_type in types.split(",") if entity_type.strip()]
@@ -79,6 +83,9 @@ async def search(
             params["media"] = validate_media_filter(media)
         except ValueError as exc:
             return {"error": f"{exc} Valid families: {', '.join(_MEDIA_FAMILIES)}."}
+    countries = [value.strip() for value in country or [] if value and value.strip()]
+    if countries:
+        params["country"] = countries
 
     return await api_get(app_context(ctx), "/api/search", params)
 

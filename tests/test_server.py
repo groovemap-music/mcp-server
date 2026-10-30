@@ -143,6 +143,29 @@ class TestSearch:
         assert "media" not in call_params
 
     @pytest.mark.asyncio
+    async def test_search_forwards_country_filter(self, mock_context, app_ctx):
+        """httpx serializes a list param as repeated `country` query parameters."""
+        from mcp_server.server import search
+
+        app_ctx.client.get = AsyncMock(return_value=_mock_response({"total": 0, "results": []}))
+
+        await search(query="test", country=["Japan", " Germany ", ""], ctx=mock_context)
+
+        assert app_ctx.client.get.call_args.kwargs["params"]["country"] == ["Japan", "Germany"]
+
+    @pytest.mark.asyncio
+    async def test_search_omits_country_when_not_given(self, mock_context, app_ctx):
+        from mcp_server.server import search
+
+        app_ctx.client.get = AsyncMock(return_value=_mock_response({"total": 0, "results": []}))
+
+        await search(query="test", ctx=mock_context)
+        await search(query="test", country=[" "], ctx=mock_context)
+
+        for call in app_ctx.client.get.call_args_list:
+            assert "country" not in call.kwargs["params"]
+
+    @pytest.mark.asyncio
     async def test_search_rejects_unknown_media_id(self, mock_context, app_ctx):
         from mcp_server.server import search
 

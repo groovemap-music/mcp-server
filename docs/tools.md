@@ -12,7 +12,7 @@ revision and digest.
 
 | MCP tool | Required schema fields | Optional schema fields and defaults | Catalog API operation |
 | --- | --- | --- | --- |
-| `search` | `query: string` | `types: string = "artist,label,master,release"`; `media: list[string] \| null = null`; `limit: integer = 20` | `GET /api/search` |
+| `search` | `query: string` | `types: string = "artist,label,master,release"`; `media: list[string] \| null = null`; `country: list[string] \| null = null`; `limit: integer = 20` | `GET /api/search` |
 | `get_artist_details` | `artist_id: string` | none | `GET /api/node/{node_id}?type=artist` |
 | `get_label_details` | `label_id: string` | none | `GET /api/node/{node_id}?type=label` |
 | `get_release_details` | `release_id: string` | none | `GET /api/node/{node_id}?type=release` |
@@ -90,6 +90,11 @@ Both `search` and `get_release_details` speak the ADR 0007 canonical media taxon
   every medium in that family; a medium id matches only itself. Ids are validated against the
   taxonomy before the request reaches the Catalog API, which reads the filter as repeated
   `media` query parameters on `GET /api/search`.
+- **`search`'s `country` filter** takes release country values, sent as repeated `country`
+  query parameters on `GET /api/search` and omitted when not given. The Catalog API matches
+  each value exactly as the catalog stores it (Discogs writes country names such as `Japan`,
+  not ISO codes; no case or code folding) and strips blank values (`catalog-api`
+  `api/routers/search.py:122-162`, `api/queries/search_queries.py:195-207`).
 - **`get_release_details`'s response** carries an additive top-level `media` block when the
   release has media data:
 
