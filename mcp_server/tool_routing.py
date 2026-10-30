@@ -61,9 +61,10 @@ async def search(
             ["optical_cd"] matches CD only. Valid families: {families}. Each family also has
             narrower medium ids beneath it (e.g. vinyl_12, optical_cd). An unknown id returns
             an error naming it.
-        country: Optional release countries (ADR 0011) to narrow release results, for example
-            ["Japan", "Germany"]. Values are matched exactly as the catalog stores them, which
-            for Discogs data means country names rather than ISO codes. Blank values are ignored.
+        country: Optional release countries to narrow release results only, for example
+            ["Japan", "Germany"]. Artist and label hits are not filtered by country. Values are
+            matched exactly as the catalog stores them, which for Discogs data means country
+            names rather than ISO codes. Blank values are ignored.
         limit: Maximum results to return (1-100, default 20).
     """
     requested = [entity_type.strip().lower() for entity_type in types.split(",") if entity_type.strip()]
@@ -83,6 +84,7 @@ async def search(
             params["media"] = validate_media_filter(media)
         except ValueError as exc:
             return {"error": f"{exc} Valid families: {', '.join(_MEDIA_FAMILIES)}."}
+    # Country is an open vocabulary (ADR 0011); catalog-api matches it exactly, so no folding here.
     countries = [value.strip() for value in country or [] if value and value.strip()]
     if countries:
         params["country"] = countries
