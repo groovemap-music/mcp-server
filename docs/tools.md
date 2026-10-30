@@ -58,7 +58,7 @@ unauthenticated write.
   queries shorter than three characters; that constraint is not encoded in the MCP input
   schema.
 - `search`'s optional `media` filter takes a list of family or medium ids from the ADR 0007
-  canonical media taxonomy (see [Media filter and block](#media-filter-and-block)). An id the
+  canonical media taxonomy (the shared vocabulary for vinyl, tape, CD, and other formats) (see [Media filter and block](#media-filter-and-block)). An id the
   taxonomy does not define returns an error naming the unknown ids and the valid families,
   instead of an empty result set that reads as "no such records".
 - Path and trend entity types are limited to `artist`, `genre`, `label`, and `style`; path
