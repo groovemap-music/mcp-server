@@ -1,10 +1,15 @@
 # GrooveMap MCP server
 
 `mcp-server` presents the GrooveMap music catalog as sixteen
-[Model Context Protocol (MCP)](https://modelcontextprotocol.io/) tools. It translates MCP
-tool calls into HTTP requests to the separately deployed
+[Model Context Protocol (MCP)](https://modelcontextprotocol.io/) tools, so an AI assistant
+or other MCP client can search and read the catalog. It translates MCP tool calls into HTTP
+requests to the separately deployed
 [`catalog-api`](https://github.com/groovemap-music/catalog-api); it never connects directly
 to a database.
+
+It is for developers who connect an MCP client to GrooveMap and for contributors to this
+adapter. You need Python 3.14 (installed by `mise`), [`mise`](https://mise.jdx.dev/), and a
+running Catalog API.
 
 ```mermaid
 flowchart LR
@@ -15,6 +20,8 @@ flowchart LR
 This repository is licensed under the [MIT License](LICENSE).
 
 ## Tools
+
+Thirteen tools read the catalog:
 
 | Tool | Purpose |
 | --- | --- |
@@ -32,8 +39,8 @@ This repository is licensed under the [MIT License](LICENSE).
 | `nlq_query` | Ask a natural-language graph question |
 | `lookup_release` | Resolve a barcode, catalogue number, or matrix inscription to a release |
 
-The last three act for the collector rather than reading the catalog, so they require a
-delegated app token and decline without one:
+Three more tools act for the collector (the person whose account is in use) rather than
+reading the catalog. They require a delegated app token and decline without one:
 
 | Delegated tool | Purpose |
 | --- | --- |
@@ -129,11 +136,10 @@ the SDK's `tools/call {tool}` server span. Catalog API requests are instrumented
 `instrument_httpx`, so each request is a child of the adapter span and carries
 `traceparent` into `catalog-api`.
 
-The process view (`process.cpu.time`, `process.cpu.utilization`, `process.memory.usage`,
-`process.memory.virtual`, `process.thread.count`, `process.open_file_descriptor.count`,
-`process.context_switches`, and the CPython garbage-collection counter) arrives with `setup_telemetry`. The server does run an asyncio
-loop — `mcp.run()` creates it for both transports — so the lifespan also starts
-`start_event_loop_monitor()`, which samples `groovemap.runtime.event_loop.lag`.
+`setup_telemetry` also adds standard process metrics (CPU, memory, threads, file
+descriptors, context switches, and garbage collection). The lifespan starts
+`start_event_loop_monitor()`, which samples `groovemap.runtime.event_loop.lag` for both
+transports.
 
 See [configuration](docs/configuration.md#opentelemetry-metrics-and-traces) for the
 environment variables and the full span and metric list.
@@ -160,6 +166,7 @@ The stable repository interface is:
 - `just secret-scan` — scan Git history and the working tree with Gitleaks.
 - `just build` — build the wheel and source distribution.
 - `just image` — build and inspect the local `mcp-server:local` Streamable HTTP image.
+- `just audit` — scan the locked dependencies for known vulnerabilities.
 - `just release-dry-run` — generate checksums, SBOM, notices, and provenance without
   publishing.
 
